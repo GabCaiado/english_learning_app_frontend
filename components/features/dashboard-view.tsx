@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,28 +8,75 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Line, LineChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { analyzeWord, addWord, getWordsForReview } from "@/lib/api"
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
+import { toast } from "sonner" 
 
 interface DashboardProps {
   onNavigateToRevisions: () => void
 }
 
+interface ReviewItem {
+  word: string
+  translation: string
+  mastery_level: "new" | "familiar" | "mastered"
+}
+
+interface ProgressData {
+  day: string
+  words: number
+}
+
 export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
   const [newWord, setNewWord] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [reviewList, setReviewList] = useState<ReviewItem[]>([])
+  const [userName, setUserName] = useState("...")
 
-  const progressData = [
-    { day: "Dom", words: 3 },
-    { day: "Seg", words: 5 },
-    { day: "Ter", words: 8 },
-    { day: "Qua", words: 6 },
-    { day: "Qui", words: 10 },
-    { day: "Sex", words: 7 },
-    { day: "Sáb", words: 8 },
-  ]
+  useEffect(() => {
+    async function loadData() {
+      try {
+        // Busca nome do usuario
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const name = user.user_metadata?.full_name || user.email?.split("@")[0] || "Usuário"
+          setUserName(name)
+        }
 
-  const wordsToReview = [
-    { word: "procrastinate", translation: "procrastinar", lastReview: "5 dias atrás", priority: "high" },
-    { word: "serendipity", translation: "acaso feliz", lastReview: "3 dias atrás", priority: "medium" },
-    { word: "resilient", translation: "resiliente", lastReview: "2 dias atrás", priority: "low" },
+        const data = await getWordsForReview()
+        setReviewList(data.slice(0, 3)) // Mostra apenas as 3 primeiras no dashboard
+      } catch (err) {
+        console.error("Erro ao carregar dados:", err)
+      }
+    }
+    loadData()
+  }, [])
+
+  const handleAddWord = async () => {
+    if (!newWord.trim()) return
+    
+    setLoading(true)
+    try {
+      await addWord(newWord)
+      toast.success(`"${newWord}" adicionada com sucesso!`)
+      setNewWord("")
+      // Opcional: atualizar estatísticas ou lista de revisão aqui
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao adicionar palavra")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const progressData: ProgressData[] = [
+    { day: "Seg", words: 2 },
+    { day: "Ter", words: 5 },
+    { day: "Qua", words: 3 },
+    { day: "Qui", words: 8 },
+    { day: "Sex", words: 6 },
+    { day: "Sáb", words: 4 },
+    { day: "Dom", words: 9 },
   ]
 
   const wordOfTheDay = {
@@ -63,7 +109,7 @@ export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">DASHBOARD</p>
-            <h2 className="text-3xl font-bold text-foreground">Olá, Gabriella</h2>
+            <h2 className="text-3xl font-bold text-foreground">Olá, {userName}</h2>
           </div>
         </div>
         <p className="text-xl text-primary font-medium">Vamos aprender novas palavras hoje!</p>
@@ -103,11 +149,17 @@ export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
               placeholder="Digite a palavra em inglês..."
               value={newWord}
               onChange={(e) => setNewWord(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAddWord()}
               className="flex-1"
+              disabled={loading}
             />
-            <Button className="bg-primary hover:bg-primary/90">
+            <Button 
+              className="bg-primary hover:bg-primary/90" 
+              onClick={handleAddWord}
+              disabled={loading}
+            >
               <Plus className="w-4 h-4 mr-2" />
-              Adicionar
+              {loading ? "Adicionando..." : "Adicionar"}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-3">
@@ -232,38 +284,41 @@ export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {wordsToReview.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-orange-500/50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold text-foreground">{item.word}</p>
-                      <Badge
-                        variant={
-                          item.priority === "high"
-                            ? "destructive"
-                            : item.priority === "medium"
-                              ? "default"
-                              : "secondary"
-                        }
-                        className="text-xs"
-                      >
-                        {item.priority === "high" ? "Urgente" : item.priority === "medium" ? "Médio" : "Baixo"}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{item.translation}</p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-orange-500 hover:text-orange-600 hover:bg-orange-500/10"
+              {reviewList.length > 0 ? (
+                reviewList.map((item, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-orange-500/50 transition-colors"
                   >
-                    Revisar
-                  </Button>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-semibold text-foreground">{item.word}</p>
+                        <Badge
+                          variant={
+                            item.mastery_level === "new" ? "destructive" : "default"
+                          }
+                          className="text-xs"
+                        >
+                          {item.mastery_level === "new" ? "Urgente" : "Revisão"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{item.translation}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-orange-500 hover:text-orange-600 hover:bg-orange-500/10"
+                      onClick={onNavigateToRevisions}
+                    >
+                      Revisar
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6 text-sm text-muted-foreground">
+                  Nenhuma palavra para revisar hoje! 🎉
                 </div>
-              ))}
+              )}
             </div>
             <Button
               variant="outline"
