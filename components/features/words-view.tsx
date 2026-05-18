@@ -1,14 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Search, Volume2, Trash2, X, BookOpen, Video, MessageSquare, Sparkles, Loader2 } from "lucide-react"
+import { Search, Volume2, Trash2, X, BookOpen, MessageSquare, Sparkles, Loader2, Flag } from "lucide-react"
 import { WordDetailModal } from "@/components/word-detail-modal"
-import { getUserWords, deleteWord } from "@/lib/api"
-import { useEffect } from "react"
+import { getUserWords, deleteWord, submitTranslationFeedback } from "@/lib/api"
 import { toast } from "sonner"
 
 export function WordsBook() {
@@ -48,8 +47,35 @@ export function WordsBook() {
   const filteredWords = words.filter(
     (w) =>
       w.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      w.translation.toLowerCase().includes(searchQuery.toLowerCase()),
+      (w.translation || "").toLowerCase().includes(searchQuery.toLowerCase()),
   )
+
+  const handleReportWrong = async (word: any) => {
+    const confirmed = window.confirm(
+      `Marcar a traduÃ§Ã£o de "${word.word}" como errada? Isso envia o caso para revisÃ£o.`
+    )
+    if (!confirmed) return
+
+    try {
+      await submitTranslationFeedback({
+        input_text: word.word,
+        model_normalized: word.normalized_form,
+        model_translation: word.translation,
+        model_is_slang: word.is_slang,
+        model_metadata: {
+          category: word.category,
+          formality_level: word.formality_level,
+          mastery_level: word.mastery_level,
+        },
+        user_feedback: "wrong",
+        source: "word_book",
+        user_word_id: word.id,
+      })
+      toast.success("Feedback salvo para revisÃ£o")
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao enviar feedback")
+    }
+  }
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -155,6 +181,18 @@ export function WordsBook() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 ml-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleReportWrong(word)
+                        }}
+                        title="Marcar traduÃ§Ã£o como errada"
+                      >
+                        <Flag className="w-4 h-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

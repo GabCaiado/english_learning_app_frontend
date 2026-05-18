@@ -3,33 +3,36 @@
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { BookOpen, LayoutDashboard, Users, Flame, LogOut } from "lucide-react"
+import { BookOpen, LayoutDashboard, Users, Flame, LogOut, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { supabase } from "@/lib/supabase"
+import { getUserProfile } from "@/lib/api"
 import { toast } from "sonner"
+import { useAuth } from "@/hooks/use-auth"
 
 export function Sidebar() {
   const router = useRouter()
   const pathname = usePathname()
-  const [user, setUser] = useState<any>(null)
+  const { user, signout } = useAuth()
+  const [role, setRole] = useState("user")
 
   useEffect(() => {
-    async function getUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+    async function fetchRole() {
+      if (user) {
+        try {
+          const profile = await getUserProfile()
+          setRole(profile.role || "user")
+        } catch (error) {
+          setRole("user")
+        }
+      }
     }
-    getUser()
-  }, [])
+    fetchRole()
+  }, [user])
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-      
-      toast.success("Até logo!")
-      router.push("/login")
-      router.refresh()
+      await signout()
     } catch (error: any) {
       toast.error("Erro ao sair")
     }
@@ -43,6 +46,10 @@ export function Sidebar() {
     { label: "Words Book", href: "/words", icon: BookOpen },
     { label: "Revisões", href: "/revisions", icon: Flame },
   ]
+
+  if (role === "admin") {
+    navItems.push({ label: "Admin Review", href: "/admin/feedback", icon: ShieldCheck })
+  }
 
   return (
     <aside className="w-64 border-r border-border bg-card flex flex-col">
@@ -86,16 +93,22 @@ export function Sidebar() {
           Convidar Amigos
         </Button>
 
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-accent/50 border border-border/50">
-          <Avatar className="w-10 h-10 border-2 border-primary/20">
+        <Link 
+          href="/profile" 
+          className="flex items-center gap-3 p-2 rounded-lg bg-accent/50 border border-border/50 hover:bg-accent transition-colors group"
+        >
+          <Avatar className="w-10 h-10 border-2 border-primary/20 group-hover:border-primary/40 transition-colors">
             <AvatarImage src={user?.user_metadata?.avatar_url} />
             <AvatarFallback className="bg-primary text-primary-foreground font-bold italic">{userInitial}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-foreground truncate">{userDisplayName}</p>
             <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            {role === "admin" && (
+              <p className="text-xs font-semibold text-primary">admin</p>
+            )}
           </div>
-        </div>
+        </Link>
 
         <Button 
           variant="ghost" 

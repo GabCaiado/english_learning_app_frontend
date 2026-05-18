@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BookMarked, Loader2, Mail, Lock, Sparkles } from "lucide-react"
+import { BookMarked, Loader2, Mail, Lock, Sparkles, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 
 export default function LoginPage() {
@@ -16,6 +16,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,6 +44,11 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     
+    if (confirmPassword !== password) {
+      toast.error("As senhas não coincidem.")
+      return
+    }
+
     try {
       const { error } = await supabase.auth.signUp({
         email,
@@ -106,15 +113,22 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <Label htmlFor="password">Senha</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
                     <Input 
                       id="password" 
-                      type="password" 
-                      className="pl-10"
+                      type={showPassword ? "text" : "password"} 
+                      className="pl-10 pr-10"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required 
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
                 <Button className="w-full h-11 text-lg font-semibold mt-2" type="submit" disabled={loading}>
@@ -143,18 +157,50 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Senha (mín. 6 caracteres)</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
                     <Input 
                       id="signup-password" 
-                      type="password" 
-                      className="pl-10"
+                      type={showPassword ? "text" : "password"} 
+                      className="pl-10 pr-10"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={6}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
+                    <Input
+                      id="confirmPassword"
+                      type={showPassword ? "text" : "password"}
+                      className="pl-10 pr-10"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-muted-foreground text-sm">
+                    {confirmPassword && confirmPassword !== password ? "Senhas não coincidem" : ""}
+                  </p>
+                </div>
+
                 <Button className="w-full h-11 text-lg font-semibold mt-2 bg-primary/90" type="submit" disabled={loading}>
                   {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "Criar Minha Conta"}
                 </Button>
