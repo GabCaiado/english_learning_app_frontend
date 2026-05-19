@@ -56,7 +56,6 @@ export function WordDetailModal({ word, isOpen, onClose }: WordDetailModalProps)
     const fetchDados = async () => {
       try {
         if (isSentence) {
-          // No backend atual, translateSentence usa query string. Vamos tentar as duas formas.
           const res = await translateSentence(word)
           setData(res)
         } else {
@@ -196,7 +195,7 @@ export function WordDetailModal({ word, isOpen, onClose }: WordDetailModalProps)
                 </Card>
               )}
 
-              {/* Video Section (Always Show, Not integrated) */}
+              {/* Video Section (Always Show, Not integrated YET) */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
