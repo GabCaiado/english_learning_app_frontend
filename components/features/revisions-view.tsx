@@ -8,9 +8,14 @@ import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Flame, Volume2, RotateCcw, CheckCircle2, XCircle,
-  Sparkles, TrendingUp, BookOpen, AlertCircle, Keyboard, Eye,
+  Sparkles, TrendingUp, BookOpen, AlertCircle, Keyboard, Eye, Dumbbell, Lock,
 } from "lucide-react"
-import { getWordsForReview, reviewWord } from "@/lib/api"
+import { getWordsForReview, getUserWords, reviewWord } from "@/lib/api"
+
+const DAILY_KEY = "daily_review_done"
+function todayStr() { return new Date().toISOString().split("T")[0] }
+function isDoneToday() { return localStorage.getItem(DAILY_KEY) === todayStr() }
+function markDoneToday() { localStorage.setItem(DAILY_KEY, todayStr()) }
 
 
 // Types
@@ -31,17 +36,17 @@ interface ReviewWord {
 
 
 const MASTERY_LABEL: Record<string, string> = {
-  new:       "Nova",
-  learning:  "Aprendendo",
+  new: "Nova",
+  learning: "Aprendendo",
   reviewing: "Revisando",
-  mastered:  "Dominada",
+  mastered: "Dominada",
 }
 
 const MASTERY_CLASS: Record<string, string> = {
-  new:       "bg-gray-100 text-gray-600 border-gray-200",
-  learning:  "bg-blue-100 text-blue-600 border-blue-200",
+  new: "bg-gray-100 text-gray-600 border-gray-200",
+  learning: "bg-blue-100 text-blue-600 border-blue-200",
   reviewing: "bg-orange-100 text-orange-600 border-orange-200",
-  mastered:  "bg-green-100 text-green-600 border-green-200",
+  mastered: "bg-green-100 text-green-600 border-green-200",
 }
 
 /** Words in "reviewing" or "mastered" require typing — the user should know them by now */
@@ -49,18 +54,16 @@ function isTypeMode(card: ReviewWord): boolean {
   return card.mastery_level === "reviewing" || card.mastery_level === "mastered"
 }
 
-/** Normalize a string for comparison: lowercase, no accents, no punctuation */
 function normalize(s: string): string {
   return s
     .toLowerCase()
     .trim()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")   // strip accents
-    .replace(/[^a-z0-9 ]/g, "")        // strip punctuation
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9 ]/g, "")
     .replace(/\s+/g, " ")
 }
 
-/** Levenshtein-based similarity score 0.0 → 1.0 */
 function similarity(a: string, b: string): number {
   const na = normalize(a)
   const nb = normalize(b)
@@ -94,27 +97,35 @@ function getAutoResult(input: string, reference: string): AutoResult {
 
 // Component
 export function Revisions() {
-  const [words, setWords]                       = useState<ReviewWord[]>([])
-  const [loading, setLoading]                   = useState(true)
-  const [error, setError]                       = useState<string | null>(null)
-  const [currentIndex, setCurrentIndex]         = useState(0)
-  const [reviewedCount, setReviewedCount]       = useState(0)
-  const [correctCount, setCorrectCount]         = useState(0)
-  const [sessionDone, setSessionDone]           = useState(false)
-  const [submitting, setSubmitting]             = useState(false)
+  const [words, setWords] = useState<ReviewWord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [reviewedCount, setReviewedCount] = useState(0)
+  const [correctCount, setCorrectCount] = useState(0)
+  const [sessionDone, setSessionDone] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [isFreePractice, setIsFreePractice] = useState(false)
 
   // Flip-card mode state
-  const [isFlipped, setIsFlipped]               = useState(false)
+  const [isFlipped, setIsFlipped] = useState(false)
 
   // Type mode state
-  const [userInput, setUserInput]               = useState("")
-  const [showResult, setShowResult]             = useState(false)
-  const [autoResult, setAutoResult]             = useState<AutoResult | null>(null)
-  const [hasSeenTypeMode, setHasSeenTypeMode]   = useState(false)
+  const [userInput, setUserInput] = useState("")
+  const [showResult, setShowResult] = useState(false)
+  const [autoResult, setAutoResult] = useState<AutoResult | null>(null)
+  const [hasSeenTypeMode, setHasSeenTypeMode] = useState(false)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => { loadWords() }, [])
+  useEffect(() => {
+    if (isDoneToday()) {
+      setSessionDone(true)
+      setLoading(false)
+    } else {
+      loadWords()
+    }
+  }, [])
 
   // Auto-focus textarea
   useEffect(() => {
@@ -123,7 +134,7 @@ export function Revisions() {
     }
   }, [currentIndex, loading, words, showResult])
 
-  async function loadWords() {
+  async function loadWords({ freePractice = false } = {}) {
     try {
       setLoading(true)
       setError(null)
@@ -131,6 +142,7 @@ export function Revisions() {
       setReviewedCount(0)
       setCorrectCount(0)
       setSessionDone(false)
+      setIsFreePractice(freePractice)
       resetCard()
       const data = await getWordsForReview()
       setWords(data)
@@ -138,6 +150,35 @@ export function Revisions() {
       setError("Não foi possível carregar as revisões. Tente novamente.")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function startFreePractice() {
+    if (words.length === 0) {
+      // No due words loaded — fetch all user words for a free session
+      try {
+        setLoading(true)
+        setError(null)
+        setCurrentIndex(0)
+        setReviewedCount(0)
+        setCorrectCount(0)
+        setSessionDone(false)
+        setIsFreePractice(true)
+        resetCard()
+        const data = await getUserWords()
+        setWords(data)
+      } catch {
+        setError("Não foi possível carregar as palavras. Tente novamente.")
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      setCurrentIndex(0)
+      setReviewedCount(0)
+      setCorrectCount(0)
+      setSessionDone(false)
+      setIsFreePractice(true)
+      resetCard()
     }
   }
 
@@ -160,10 +201,12 @@ export function Revisions() {
     if (!card || submitting) return
     setSubmitting(true)
 
-    try {
-      await reviewWord(card.id, quality)
-    } catch {
-      console.error("Failed to save review result")
+    if (!isFreePractice) {
+      try {
+        await reviewWord(card.id, quality)
+      } catch {
+        console.error("Failed to save review result")
+      }
     }
 
     if (quality >= 3) setCorrectCount(c => c + 1)
@@ -173,6 +216,7 @@ export function Revisions() {
       setCurrentIndex(i => i + 1)
       resetCard()
     } else {
+      if (!isFreePractice) markDoneToday()
       setSessionDone(true)
     }
     setSubmitting(false)
@@ -203,7 +247,69 @@ export function Revisions() {
           <CardContent className="p-8 text-center space-y-4">
             <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
             <p className="text-foreground font-medium">{error}</p>
-            <Button onClick={loadWords}>Tentar Novamente</Button>
+            <Button onClick={() => loadWords()}>Tentar Novamente</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (sessionDone) {
+    const accuracy = reviewedCount > 0 ? Math.round((correctCount / reviewedCount) * 100) : 0
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-green-500/5 p-8 flex items-center justify-center">
+        <Card className="max-w-2xl w-full border-2 border-green-200">
+          <CardContent className="p-12 text-center space-y-6">
+            <div className="w-20 h-20 mx-auto rounded-full bg-green-50 flex items-center justify-center">
+              <CheckCircle2 className="w-10 h-10 text-green-500" />
+            </div>
+            <div>
+              <h2 className="text-4xl font-bold text-foreground mb-2">
+                {isFreePractice ? "Prática Concluída!" : "Revisão Diária Concluída!"}
+              </h2>
+              <p className="text-lg text-muted-foreground">
+                {isFreePractice
+                  ? "Bom treino! Lembre-se que esta prática não afeta seu progresso."
+                  : "Parabéns! Volte amanhã para a próxima revisão."}
+              </p>
+            </div>
+            {reviewedCount > 0 && (
+              <div className="grid grid-cols-2 gap-4 max-w-md mx-auto py-6">
+                <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-3xl font-bold text-primary mb-1">{correctCount}/{reviewedCount}</p>
+                  <p className="text-sm text-muted-foreground">Palavras Lembradas</p>
+                </div>
+                <div className="p-4 rounded-lg bg-green-50 border border-green-200">
+                  <p className="text-3xl font-bold text-green-600 mb-1">{accuracy}%</p>
+                  <p className="text-sm text-muted-foreground">Taxa de Acerto</p>
+                </div>
+              </div>
+            )}
+
+            {/* Daily review locked notice */}
+            {!isFreePractice && (
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border border-border max-w-md mx-auto">
+                <Lock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                <p className="text-sm text-muted-foreground text-left">
+                  A revisão diária já foi concluída. Suas palavras foram agendadas para os próximos dias.
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+              {/* Free practice option — always visible, but label changes */}
+              <Button size="lg" variant="outline" onClick={startFreePractice}
+                className="border-dashed border-2">
+                <Dumbbell className="w-5 h-5 mr-2" />
+                {isFreePractice ? "Praticar de Novo" : "Praticar Mais"}
+                <span className="ml-2 text-xs text-muted-foreground font-normal">(sem pontos)</span>
+              </Button>
+              <Button size="lg" className="bg-primary hover:bg-primary/90"
+                onClick={() => (window.location.href = "/words")}>
+                <TrendingUp className="w-5 h-5 mr-2" />
+                Ver Progresso
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -224,48 +330,16 @@ export function Revisions() {
                 Nenhuma palavra para revisar hoje. Volte amanhã ou adicione novas palavras.
               </p>
             </div>
-            <Button variant="outline" onClick={() => (window.location.href = "/words")}>
-              <BookOpen className="w-4 h-4 mr-2" />
-              Ver Minhas Palavras
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (sessionDone) {
-    const accuracy = reviewedCount > 0 ? Math.round((correctCount / reviewedCount) * 100) : 0
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-green-500/5 p-8 flex items-center justify-center">
-        <Card className="max-w-2xl w-full border-2 border-green-200">
-          <CardContent className="p-12 text-center space-y-6">
-            <div className="w-20 h-20 mx-auto rounded-full bg-green-50 flex items-center justify-center">
-              <CheckCircle2 className="w-10 h-10 text-green-500" />
-            </div>
-            <div>
-              <h2 className="text-4xl font-bold text-foreground mb-2">Sessão Concluída!</h2>
-              <p className="text-lg text-muted-foreground">Parabéns por completar sua revisão diária</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4 max-w-md mx-auto py-6">
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <p className="text-3xl font-bold text-primary mb-1">{correctCount}/{reviewedCount}</p>
-                <p className="text-sm text-muted-foreground">Palavras Lembradas</p>
-              </div>
-              <div className="p-4 rounded-lg bg-green-50 border border-green-200">
-                <p className="text-3xl font-bold text-green-600 mb-1">{accuracy}%</p>
-                <p className="text-sm text-muted-foreground">Taxa de Acerto</p>
-              </div>
-            </div>
-            <div className="flex gap-4 justify-center pt-4">
-              <Button size="lg" variant="outline" onClick={loadWords}>
-                <RotateCcw className="w-5 h-5 mr-2" />
-                Nova Sessão
+            <div className="flex flex-col gap-3">
+              <Button size="lg" variant="outline" onClick={startFreePractice}
+                className="border-dashed border-2">
+                <Dumbbell className="w-5 h-5 mr-2" />
+                Praticar Mais
+                <span className="ml-2 text-xs text-muted-foreground font-normal">(sem pontos)</span>
               </Button>
-              <Button size="lg" className="bg-primary hover:bg-primary/90"
-                onClick={() => (window.location.href = "/words")}>
-                <TrendingUp className="w-5 h-5 mr-2" />
-                Ver Progresso
+              <Button variant="outline" onClick={() => (window.location.href = "/words")}>
+                <BookOpen className="w-4 h-4 mr-2" />
+                Ver Minhas Palavras
               </Button>
             </div>
           </CardContent>
@@ -276,14 +350,14 @@ export function Revisions() {
 
   // Main flashcard
 
-  const currentCard  = words[currentIndex]
-  const totalCards   = words.length
-  const progress     = (reviewedCount / totalCards) * 100
-  const accuracy     = reviewedCount > 0 ? Math.round((correctCount / reviewedCount) * 100) : 0
-  const examples     = currentCard.word_examples?.map(e => e.example_en).filter(Boolean) ?? []
+  const currentCard = words[currentIndex]
+  const totalCards = words.length
+  const progress = (reviewedCount / totalCards) * 100
+  const accuracy = reviewedCount > 0 ? Math.round((correctCount / reviewedCount) * 100) : 0
+  const examples = currentCard.word_examples?.map(e => e.example_en).filter(Boolean) ?? []
   const masteryClass = MASTERY_CLASS[currentCard.mastery_level] ?? MASTERY_CLASS.new
   const masteryLabel = MASTERY_LABEL[currentCard.mastery_level] ?? "Nova"
-  const typeMode     = isTypeMode(currentCard)
+  const typeMode = isTypeMode(currentCard)
 
   return (
     <div className="min-h-screen bg-gradient-to-br pt-14 from-primary/5 via-background to-orange-500/5 p-8">
@@ -303,11 +377,10 @@ export function Revisions() {
             </div>
             <div className="flex items-center gap-4">
               {/* Mode badge */}
-              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
-                typeMode
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${typeMode
                   ? "bg-purple-50 text-purple-700 border-purple-200"
                   : "bg-sky-50 text-sky-700 border-sky-200"
-              }`}>
+                }`}>
                 {typeMode
                   ? <><Keyboard className="w-3.5 h-3.5" /> Recall Ativo</>
                   : <><Eye className="w-3.5 h-3.5" /> Reconhecimento</>
@@ -317,7 +390,7 @@ export function Revisions() {
                 <p className="text-2xl font-bold text-primary">{accuracy}%</p>
                 <p className="text-xs text-muted-foreground">Acurácia</p>
               </div>
-              <Button variant="outline" size="sm" onClick={loadWords}>
+              <Button variant="outline" size="sm" onClick={() => loadWords()}>
                 <RotateCcw className="w-4 h-4" />
               </Button>
             </div>
@@ -331,6 +404,19 @@ export function Revisions() {
             <Progress value={progress} className="h-2" />
           </div>
         </div>
+
+        {/* ── Free practice banner ── */}
+        {isFreePractice && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-3">
+            <Dumbbell className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Modo Prática Livre</p>
+              <p className="text-sm text-amber-700">
+                Sem efeito no progresso — suas palavras e intervalos de revisão não serão alterados.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── First-time type mode warning ── */}
         {typeMode && !hasSeenTypeMode && (
@@ -364,10 +450,10 @@ export function Revisions() {
                     <h3 className="text-6xl font-bold text-foreground">{currentCard.word}</h3>
                     {currentCard.is_slang && currentCard.normalized_form &&
                       currentCard.normalized_form !== currentCard.word && (
-                      <p className="text-lg text-muted-foreground italic">
-                        → {currentCard.normalized_form}
-                      </p>
-                    )}
+                        <p className="text-lg text-muted-foreground italic">
+                          → {currentCard.normalized_form}
+                        </p>
+                      )}
                   </div>
                   <Button size="lg" variant="outline" onClick={() => playAudio(currentCard.word)}
                     className="bg-transparent border-2">
@@ -447,8 +533,8 @@ export function Revisions() {
                   <h3 className="text-6xl font-bold text-foreground pt-2">{currentCard.word}</h3>
                   {currentCard.is_slang && currentCard.normalized_form &&
                     currentCard.normalized_form !== currentCard.word && (
-                    <p className="text-base text-muted-foreground italic">→ {currentCard.normalized_form}</p>
-                  )}
+                      <p className="text-base text-muted-foreground italic">→ {currentCard.normalized_form}</p>
+                    )}
                   <Button variant="ghost" size="sm" onClick={() => playAudio(currentCard.word)}>
                     <Volume2 className="w-4 h-4 mr-1.5" />Ouvir
                   </Button>
@@ -553,27 +639,24 @@ export function Revisions() {
                       <div className="grid grid-cols-3 gap-3">
                         <Button size="lg" variant="outline" disabled={submitting}
                           onClick={() => handleReview(1)}
-                          className={`h-16 border-2 flex-col gap-1 hover:border-red-300 hover:bg-red-50 ${
-                            autoResult === "wrong" ? "border-red-300 bg-red-50" : ""
-                          }`}>
+                          className={`h-16 border-2 flex-col gap-1 hover:border-red-300 hover:bg-red-50 ${autoResult === "wrong" ? "border-red-300 bg-red-50" : ""
+                            }`}>
                           <XCircle className="w-5 h-5 text-red-500" />
                           <span className="text-xs font-medium">Errei</span>
                         </Button>
                         <Button size="lg" variant="outline" disabled={submitting}
                           onClick={() => handleReview(3)}
-                          className={`h-16 border-2 flex-col gap-1 hover:border-amber-300 hover:bg-amber-50 ${
-                            autoResult === "close" ? "border-amber-300 bg-amber-50" : ""
-                          }`}>
+                          className={`h-16 border-2 flex-col gap-1 hover:border-amber-300 hover:bg-amber-50 ${autoResult === "close" ? "border-amber-300 bg-amber-50" : ""
+                            }`}>
                           <Sparkles className="w-5 h-5 text-amber-500" />
                           <span className="text-xs font-medium">Quase</span>
                         </Button>
                         <Button size="lg" disabled={submitting}
                           onClick={() => handleReview(5)}
-                          className={`h-16 flex-col gap-1 ${
-                            autoResult === "correct"
+                          className={`h-16 flex-col gap-1 ${autoResult === "correct"
                               ? "bg-green-500 hover:bg-green-600"
                               : "bg-green-500 hover:bg-green-600"
-                          }`}>
+                            }`}>
                           <CheckCircle2 className="w-5 h-5" />
                           <span className="text-xs font-medium">Acertei!</span>
                         </Button>

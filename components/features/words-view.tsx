@@ -52,7 +52,7 @@ export function WordsBook() {
 
   const handleReportWrong = async (word: any) => {
     const confirmed = window.confirm(
-      `Marcar a traduÃ§Ã£o de "${word.word}" como errada? Isso envia o caso para revisÃ£o.`
+      `Marcar a tradução de "${word.word}" como errada? Isso envia o caso para revisão.`
     )
     if (!confirmed) return
 
@@ -71,7 +71,7 @@ export function WordsBook() {
         source: "word_book",
         user_word_id: word.id,
       })
-      toast.success("Feedback salvo para revisÃ£o")
+      toast.success("Feedback salvo para revisão")
     } catch (err: any) {
       toast.error(err.message || "Erro ao enviar feedback")
     }

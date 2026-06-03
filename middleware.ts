@@ -1,37 +1,52 @@
-import { type NextRequest } from 'next/server'
-import { updateSession } from '@/lib/supabase/middleware'
+/**
+ * middleware.ts
+ * -------------
+ * UX-only protection layer.
+ *
+ * IMPORTANT: This middleware does NOT validate JWT signatures, expiry, or
+ * token version. It only checks that the access_token cookie is *present*.
+ *
+ * Real security lives in the FastAPI backend:
+ *   - RS256 signature verification
+ *   - Expiry check
+ *   - token_version / account status check
+ *
+ * A user with an expired or invalid token will still pass this middleware but
+ * will receive a 401 from the API, which triggers the client-side refresh
+ * interceptor in lib/api.ts.
+ */
 
-export async function middleware(request: NextRequest) {
-  const { supabase, response } = updateSession(request)
+import { type NextRequest, NextResponse } from 'next/server'
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+const PUBLIC_PATHS = ['/login']
 
+export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
-
-  // Se o usuário já estiver logado e tentar acessar a página de login, manda pro dashboard
-  if (session && path === '/login') {
-    return Response.redirect(new URL('/', request.url))
+  if (
+    path.startsWith('/_next') ||
+    path.startsWith('/api') ||
+    /\.(svg|png|jpg|jpeg|gif|webp|ico)$/.test(path)
+  ) {
+    return NextResponse.next()
   }
 
-  // Se o usuário NÃO estiver logado e tentar acessar qualquer outra página (que não seja login ou API), manda pro login
-  if (!session && path !== '/login' && !path.startsWith('/api') && !path.startsWith('/_next')) {
-    return Response.redirect(new URL('/login', request.url))
+  const isPublicPath = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + '/'))
+  const hasAccessToken = (request.cookies.get('access_token')?.value?.length ?? 0) > 0
+
+  if (hasAccessToken && isPublicPath) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+  if (!hasAccessToken && !isPublicPath) {
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('next', path)
+    return NextResponse.redirect(loginUrl)
   }
 
-  return response
+  return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }

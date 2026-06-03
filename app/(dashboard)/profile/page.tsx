@@ -28,7 +28,7 @@ function calculateStreak(words: Array<{ created_at?: string }>): number {
 
   const sorted = Array.from(daySet).sort().reverse() // newest first
 
-  const today     = new Date().toISOString().split("T")[0]
+  const today = new Date().toISOString().split("T")[0]
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().split("T")[0]
 
   // Streak must be active (word added today or yesterday)
@@ -37,7 +37,7 @@ function calculateStreak(words: Array<{ created_at?: string }>): number {
   let streak = 1
   for (let i = 1; i < sorted.length; i++) {
     const prev = new Date(sorted[i - 1] + "T12:00:00")
-    const curr = new Date(sorted[i]     + "T12:00:00")
+    const curr = new Date(sorted[i] + "T12:00:00")
     const diff = Math.round((prev.getTime() - curr.getTime()) / 86_400_000)
     if (diff === 1) {
       streak++
@@ -56,17 +56,17 @@ function calculateStreak(words: Array<{ created_at?: string }>): number {
 export default function ProfilePage() {
   const { signout, user, updatePassword } = useAuth()
 
-  const [password,     setPassword]     = useState("")
+  const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [name,         setName]         = useState("")
-  const [email,        setEmail]        = useState("")
-  const [wordCount,    setWordCount]    = useState<number | null>(null)
-  const [streak,       setStreak]       = useState<number | null>(null)
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [wordCount, setWordCount] = useState<number | null>(null)
+  const [streak, setStreak] = useState<number | null>(null)
 
   // Populate from auth session
   useEffect(() => {
     if (user) {
-      setName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Usuário")
+      setName(user.full_name || user.username || user.email?.split("@")[0] || "Usuário")
       setEmail(user.email || "")
     }
   }, [user])
@@ -106,7 +106,7 @@ export default function ProfilePage() {
                 <div className="relative w-fit mx-auto">
                   <Avatar className="w-28 h-28 ring-4 ring-background shadow-xl">
                     <AvatarImage
-                      src={user?.user_metadata?.avatar_url}
+                      src={user?.avatar_url ?? undefined}
                       className="object-cover"
                     />
                     <AvatarFallback className="text-3xl font-bold bg-primary text-primary-foreground">
@@ -258,23 +258,21 @@ export default function ProfilePage() {
 
                 <div className="grid grid-cols-4 gap-3 pt-1">
                   {[
-                    { label: "1ª Palavra",  unlocked: (wordCount ?? 0) >= 1  },
+                    { label: "1ª Palavra", unlocked: (wordCount ?? 0) >= 1 },
                     { label: "10 Palavras", unlocked: (wordCount ?? 0) >= 10 },
-                    { label: "3 Dias",      unlocked: (streak    ?? 0) >= 3  },
-                    { label: "7 Dias",      unlocked: (streak    ?? 0) >= 7  },
+                    { label: "3 Dias", unlocked: (streak ?? 0) >= 3 },
+                    { label: "7 Dias", unlocked: (streak ?? 0) >= 7 },
                   ].map((badge) => (
                     <div
                       key={badge.label}
-                      className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-1 border-2 transition-colors ${
-                        badge.unlocked
+                      className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-1 border-2 transition-colors ${badge.unlocked
                           ? "bg-primary/10 border-primary/30"
                           : "bg-accent/30 border-dashed border-muted-foreground/10"
-                      }`}
+                        }`}
                     >
                       <Award className={`w-7 h-7 ${badge.unlocked ? "text-primary" : "text-muted-foreground/20"}`} />
-                      <p className={`text-[9px] font-bold text-center leading-tight px-1 ${
-                        badge.unlocked ? "text-primary" : "text-muted-foreground/30"
-                      }`}>
+                      <p className={`text-[9px] font-bold text-center leading-tight px-1 ${badge.unlocked ? "text-primary" : "text-muted-foreground/30"
+                        }`}>
                         {badge.label}
                       </p>
                     </div>

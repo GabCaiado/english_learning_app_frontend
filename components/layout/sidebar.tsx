@@ -39,7 +39,7 @@ export function Sidebar() {
   }
 
   const userInitial = user?.email?.[0]?.toUpperCase() || "U"
-  const userDisplayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Usuário"
+  const userDisplayName = user?.full_name || user?.username || user?.email?.split("@")[0] || "Usuário"
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -98,7 +98,7 @@ export function Sidebar() {
           className="flex items-center gap-3 p-2 rounded-lg bg-accent/50 border border-border/50 hover:bg-accent transition-colors group"
         >
           <Avatar className="w-10 h-10 border-2 border-primary/20 group-hover:border-primary/40 transition-colors">
-            <AvatarImage src={user?.user_metadata?.avatar_url} />
+            <AvatarImage src={user?.avatar_url ?? undefined} />
             <AvatarFallback className="bg-primary text-primary-foreground font-bold italic">{userInitial}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">

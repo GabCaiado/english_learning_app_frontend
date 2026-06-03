@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Line, LineChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { analyzeWord, addWord, getWordsForReview } from "@/lib/api"
+import { addWord, getWordsForReview } from "@/lib/api"
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { toast } from "sonner" 
+import { useAuth } from "@/hooks/use-auth"
+import { toast } from "sonner"
 
 interface DashboardProps {
   onNavigateToRevisions: () => void
@@ -29,23 +29,18 @@ interface ProgressData {
 }
 
 export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
+  const { user } = useAuth()
   const [newWord, setNewWord] = useState("")
   const [loading, setLoading] = useState(false)
   const [reviewList, setReviewList] = useState<ReviewItem[]>([])
-  const [userName, setUserName] = useState("...")
+
+  const userName = user?.full_name || user?.username || user?.email?.split("@")[0] || "..."
 
   useEffect(() => {
     async function loadData() {
       try {
-        // Busca nome do usuario
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const name = user.user_metadata?.full_name || user.email?.split("@")[0] || "Usuário"
-          setUserName(name)
-        }
-
         const data = await getWordsForReview()
-        setReviewList(data.slice(0, 3)) // Mostra apenas as 3 primeiras no dashboard
+        setReviewList(data.slice(0, 3))
       } catch (err) {
         console.error("Erro ao carregar dados:", err)
       }
@@ -55,13 +50,12 @@ export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
 
   const handleAddWord = async () => {
     if (!newWord.trim()) return
-    
+
     setLoading(true)
     try {
       await addWord(newWord)
       toast.success(`"${newWord}" adicionada com sucesso!`)
       setNewWord("")
-      // Opcional: atualizar estatísticas ou lista de revisão aqui
     } catch (err: any) {
       toast.error(err.message || "Erro ao adicionar palavra")
     } finally {
@@ -88,9 +82,9 @@ export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
   }
 
   const stats = [
-    { label: "Palavras Aprendidas", value: "47", icon: BookMarked, color: "text-primary" },
-    { label: "Sequência Diária", value: "12", icon: Flame, color: "text-orange-500" },
-    { label: "Esta Semana", value: "8", icon: Calendar, color: "text-blue-500" },
+    { label: "XP Total", value: String(user?.total_xp ?? 0), icon: BookMarked, color: "text-primary" },
+    { label: "Sequência Diária", value: String(user?.current_streak ?? 0), icon: Flame, color: "text-orange-500" },
+    { label: "Meta Diária", value: String(user?.daily_goal ?? 10), icon: Calendar, color: "text-blue-500" },
   ]
 
   const weeklyGoal = {
@@ -153,8 +147,8 @@ export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
               className="flex-1"
               disabled={loading}
             />
-            <Button 
-              className="bg-primary hover:bg-primary/90" 
+            <Button
+              className="bg-primary hover:bg-primary/90"
               onClick={handleAddWord}
               disabled={loading}
             >
