@@ -1,6 +1,5 @@
 /**
  * lib/api.ts
- * ----------
  * API wrappers for all domain endpoints.
  * Uses authFetch (credentials: include, CSRF token injected automatically).
  * On 401 responses the wrapper automatically attempts one token refresh before failing.
@@ -10,7 +9,7 @@ import { authFetch, refreshTokens } from './auth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// ─── Auto-refresh interceptor ─────────────────────────────────────────────────
+// Auto-refresh interceptor
 
 async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   let res = await authFetch(path, options);
@@ -26,7 +25,7 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
   return res;
 }
 
-// ─── Translate ────────────────────────────────────────────────────────────────
+// Translate
 
 export async function analyzeWord(word: string) {
   const res = await apiFetch(`/translate/word/${encodeURIComponent(word)}`);
@@ -46,7 +45,7 @@ export async function translateSentence(sentence: string) {
   return res.json();
 }
 
-// ─── Words / Vocabulary ───────────────────────────────────────────────────────
+// Words / Vocabulary
 
 export async function addWord(word: string, contextSentence?: string) {
   const res = await apiFetch('/words/', {
@@ -87,7 +86,7 @@ export async function deleteWord(wordId: string) {
   return res.json();
 }
 
-// ─── User Profile ─────────────────────────────────────────────────────────────
+// User Profile
 
 export async function getUserProfile() {
   const res = await apiFetch('/users/me');
@@ -107,7 +106,7 @@ export async function updateUserProfile(data: Record<string, unknown>) {
   return res.json();
 }
 
-// ─── Translation Feedback ─────────────────────────────────────────────────────
+// Translation Feedback
 
 export type TranslationFeedbackPayload = {
   input_text: string;
@@ -168,6 +167,63 @@ export async function rejectTranslationFeedback(id: string, status: 'rejected' |
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Erro ao rejeitar feedback' }));
     throw new Error(err.detail || 'Erro ao rejeitar feedback');
+  }
+  return res.json();
+}
+
+// Admin — Dataset Generation
+
+export type GenerateBatchParams = {
+  count: number;
+  categories: string[];
+  context_style: string;
+  slang_mix: number;
+};
+
+export type GenerateBatchResult = {
+  generated: number;
+  auto_approved: number;
+  queued_for_review: number;
+  message: string;
+};
+
+export type MilestoneInfo = {
+  count: number;
+  label: string;
+  emoji: string;
+  reached: boolean;
+};
+
+export type DatasetStats = {
+  total_approved: number;
+  slang_count: number;
+  neutral_count: number;
+  pending_review: number;
+  by_source: Record<string, number>;
+  milestones: MilestoneInfo[];
+  next_milestone: MilestoneInfo | null;
+  balance_ok: boolean;
+  distilbert_ready: boolean;
+  byt5_ready: boolean;
+};
+
+export async function generateDatasetBatch(params: GenerateBatchParams): Promise<GenerateBatchResult> {
+  const res = await apiFetch('/admin/dataset/generate', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao gerar batch' }));
+    throw new Error(err.detail || 'Erro ao gerar batch');
+  }
+  return res.json();
+}
+
+export async function getDatasetStats(): Promise<DatasetStats> {
+  const res = await apiFetch('/admin/dataset/stats');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao buscar stats' }));
+    throw new Error(err.detail || 'Erro ao buscar stats');
   }
   return res.json();
 }

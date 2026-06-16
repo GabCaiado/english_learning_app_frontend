@@ -1,9 +1,11 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { toast } from "sonner"
 import { login as apiLogin, logout as apiLogout, getMe, UserProfile, refreshTokens, authFetch } from "@/lib/auth"
+
+const PUBLIC_PATHS = ['/login', '/reset-password', '/forgot-password', '/verify-email', '/signup']
 
 interface AuthContextType {
   user: UserProfile | null
@@ -19,11 +21,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
-    getMe()
-      .then((profile) => setUser(profile))
-      .finally(() => setLoading(false))
+    const isPublic = PUBLIC_PATHS.some((p) => pathname?.startsWith(p))
+
+    const init = async () => {
+      const res = await authFetch('/auth/me', { skipCsrf: true })
+
+      if (res.ok) {
+        setUser(await res.json())
+        return
+      }
+
+      if (isPublic) return
+
+      if (res.status === 401) {
+        const refreshed = await refreshTokens()
+        if (refreshed) {
+          const res2 = await authFetch('/auth/me', { skipCsrf: true })
+          if (res2.ok) {
+            setUser(await res2.json())
+            return
+          }
+        }
+      }
+
+      await apiLogout()
+      router.push('/login')
+    }
+
+    init().finally(() => setLoading(false))
   }, [])
 
   const signin = useCallback(async (email: string, password: string) => {

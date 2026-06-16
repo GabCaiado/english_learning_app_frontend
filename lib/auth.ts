@@ -8,7 +8,7 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// ─── CSRF helper ─────────────────────────────────────────────────────────────
+// CSRF helper
 
 export function getCsrfToken(): string | null {
   if (typeof document === 'undefined') return null;
@@ -16,7 +16,7 @@ export function getCsrfToken(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-// ─── Core fetch wrapper ───────────────────────────────────────────────────────
+// Core fetch wrapper
 
 interface FetchOptions extends RequestInit {
   skipCsrf?: boolean;
@@ -42,7 +42,7 @@ export async function authFetch(path: string, options: FetchOptions = {}): Promi
   });
 }
 
-// ─── Auth operations ──────────────────────────────────────────────────────────
+// Auth operations
 
 export interface UserProfile {
   id: string;
@@ -118,11 +118,28 @@ export async function getMe(): Promise<UserProfile | null> {
 }
 
 export async function forgotPassword(email: string): Promise<void> {
-  await authFetch('/auth/forgot-password', {
+  const res = await authFetch('/auth/forgot-password', {
     method: 'POST',
     skipCsrf: true,
     body: JSON.stringify({ email }),
   });
+  if (!res.ok) {
+    if (res.status === 429) throw new Error('Muitas tentativas. Aguarde alguns minutos e tente novamente.');
+    const err = await res.json().catch(() => ({ detail: 'Erro desconhecido' }));
+    throw new Error(err.detail || 'Erro ao enviar link de redefinição');
+  }
+}
+
+export async function resendVerification(email: string): Promise<void> {
+  const res = await authFetch('/auth/resend-verification', {
+    method: 'POST',
+    skipCsrf: true,
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro desconhecido' }));
+    throw new Error(err.detail || 'Erro ao reenviar verificação');
+  }
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
