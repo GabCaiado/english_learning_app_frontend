@@ -31,6 +31,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (res.ok) {
         setUser(await res.json())
+        if (isPublic) router.push('/')
         return
       }
 

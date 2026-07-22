@@ -103,12 +103,26 @@ export async function logout(): Promise<void> {
   await authFetch('/auth/logout', { method: 'POST' });
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
 export async function refreshTokens(): Promise<boolean> {
-  const res = await authFetch('/auth/refresh', {
-    method: 'POST',
-    skipCsrf: true, // refresh endpoint exempted on backend
-  });
-  return res.ok;
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const res = await authFetch('/auth/refresh', {
+        method: 'POST',
+        skipCsrf: true, // refresh endpoint exempted on backend
+      });
+      return res.ok;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export async function getMe(): Promise<UserProfile | null> {
