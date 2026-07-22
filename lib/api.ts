@@ -178,6 +178,7 @@ export type GenerateBatchParams = {
   categories: string[];
   context_style: string;
   slang_mix: number;
+  target_word?: string;
 };
 
 export type GenerateBatchResult = {
@@ -224,6 +225,45 @@ export async function getDatasetStats(): Promise<DatasetStats> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Erro ao buscar stats' }));
     throw new Error(err.detail || 'Erro ao buscar stats');
+  }
+  return res.json();
+}
+
+export type VocabularyInfo = {
+  unique_words: number;
+  words: string[];
+};
+
+export type AmplifyVocabularyParams = {
+  variations_per_word: number;
+  words?: string[] | null;
+};
+
+export type AmplifyVocabularyResult = {
+  words_processed: number;
+  generated: number;
+  auto_approved: number;
+  queued_for_review: number;
+  message: string;
+};
+
+export async function getVocabulary(): Promise<VocabularyInfo> {
+  const res = await apiFetch('/admin/dataset/vocabulary');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao buscar vocabulario' }));
+    throw new Error(err.detail || 'Erro ao buscar vocabulario');
+  }
+  return res.json();
+}
+
+export async function amplifyVocabulary(params: AmplifyVocabularyParams): Promise<AmplifyVocabularyResult> {
+  const res = await apiFetch('/admin/dataset/amplify', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Erro ao amplificar vocabulario' }));
+    throw new Error(err.detail || 'Erro ao amplificar vocabulario');
   }
   return res.json();
 }

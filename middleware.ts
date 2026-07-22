@@ -32,11 +32,13 @@ export function middleware(request: NextRequest) {
 
   const isPublicPath = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + '/'))
   const hasAccessToken = (request.cookies.get('access_token')?.value?.length ?? 0) > 0
+  const hasRefreshToken = (request.cookies.get('refresh_token')?.value?.length ?? 0) > 0
+  const hasSession = hasAccessToken || hasRefreshToken
 
-  if (hasAccessToken && isPublicPath) {
+  if (hasSession && isPublicPath) {
     return NextResponse.redirect(new URL('/', request.url))
   }
-  if (!hasAccessToken && !isPublicPath) {
+  if (!hasSession && !isPublicPath) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', path)
     return NextResponse.redirect(loginUrl)
