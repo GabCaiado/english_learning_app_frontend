@@ -25,6 +25,10 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
   return res;
 }
 
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
+}
+
 // Translate
 
 export async function analyzeWord(word: string) {
@@ -59,8 +63,13 @@ export async function addWord(word: string, contextSentence?: string) {
   return res.json();
 }
 
-export async function getUserWords(limit = 50, offset = 0) {
-  const res = await apiFetch(`/words/?limit=${limit}&offset=${offset}`);
+export type WordListResult = {
+  items: any[];
+  total: number;
+};
+
+export async function getUserWords(limit = 50, offset = 0, signal?: AbortSignal): Promise<WordListResult> {
+  const res = await apiFetch(`/words/?limit=${limit}&offset=${offset}`, { signal });
   if (!res.ok) throw new Error('Erro ao buscar palavras');
   return res.json();
 }
@@ -83,6 +92,31 @@ export async function reviewWord(wordId: string, quality: number) {
 export async function deleteWord(wordId: string) {
   const res = await apiFetch(`/words/${wordId}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Erro ao excluir palavra');
+  return res.json();
+}
+
+export type WordOfTheDay = {
+  word: string;
+  translation_pt: string;
+  meaning_pt: string | null;
+  example: string | null;
+  example_pt: string | null;
+};
+
+export async function getWordOfTheDay(): Promise<WordOfTheDay> {
+  const res = await apiFetch('/words/word-of-the-day');
+  if (!res.ok) throw new Error('Erro ao buscar palavra do dia');
+  return res.json();
+}
+
+export type DailyWordCount = {
+  date: string;
+  count: number;
+};
+
+export async function getWeeklyProgress(): Promise<DailyWordCount[]> {
+  const res = await apiFetch('/words/progress/weekly');
+  if (!res.ok) throw new Error('Erro ao buscar progresso semanal');
   return res.json();
 }
 
@@ -138,8 +172,20 @@ export type TranslationFeedbackReviewPayload = {
   failure_type?: string;
 };
 
-export async function getPendingTranslationFeedback(limit = 50) {
-  const res = await apiFetch(`/translation-feedback/pending?limit=${limit}`);
+export type TranslationFeedbackListResult = {
+  items: any[];
+  total: number;
+};
+
+export async function getPendingTranslationFeedback(
+  limit = 50,
+  offset = 0,
+  signal?: AbortSignal,
+  sources?: string[],
+): Promise<TranslationFeedbackListResult> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (sources && sources.length > 0) params.set('sources', sources.join(','));
+  const res = await apiFetch(`/translation-feedback/pending?${params.toString()}`, { signal });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Erro ao buscar feedbacks' }));
     throw new Error(err.detail || 'Erro ao buscar feedbacks');
@@ -179,12 +225,14 @@ export type GenerateBatchParams = {
   context_style: string;
   slang_mix: number;
   target_word?: string;
+  avoid_overrepresented?: boolean;
 };
 
 export type GenerateBatchResult = {
   generated: number;
   auto_approved: number;
   queued_for_review: number;
+  avoided_words: string[];
   message: string;
 };
 
@@ -232,15 +280,17 @@ export async function getDatasetStats(): Promise<DatasetStats> {
 export type VocabularyInfo = {
   unique_words: number;
   words: string[];
+  word_counts: Record<string, number>;
+  overrepresented_words: string[];
 };
 
 export type AmplifyVocabularyParams = {
-  variations_per_word: number;
   words?: string[] | null;
 };
 
 export type AmplifyVocabularyResult = {
   words_processed: number;
+  words_skipped: number;
   generated: number;
   auto_approved: number;
   queued_for_review: number;

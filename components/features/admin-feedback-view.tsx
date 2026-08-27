@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   Bot,
@@ -34,6 +35,7 @@ import {
   getDatasetStats,
   getPendingTranslationFeedback,
   getVocabulary,
+  isAbortError,
   rejectTranslationFeedback,
   translateSentence,
   type DatasetStats,
@@ -45,8 +47,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { PaginationControls } from "@/components/pagination-controls"
 
 
 type FeedbackRow = {
@@ -63,6 +67,11 @@ type FeedbackRow = {
     formality?: string
     slang_words?: string[]
     auto_approved?: boolean
+    llm_suggested_is_slang?: boolean
+    llm_suggested_normalized?: string
+    llm_suggested_translation?: string | null
+    translation_warnings?: { llm_suggested?: string[]; model?: string[] }
+    was_edited?: boolean
   }
   user_feedback: string
   source: string
@@ -77,7 +86,36 @@ type Draft = {
   failure_type: string
 }
 
+function seedValues(row: FeedbackRow) {
+  if (AI_SOURCES.includes(row.source)) {
+    return {
+      normalized: row.model_metadata?.llm_suggested_normalized ?? (row.model_normalized || row.input_text),
+      translation: row.model_metadata?.llm_suggested_translation ?? (row.model_translation || ""),
+      isSlang: row.model_metadata?.llm_suggested_is_slang ?? (row.model_is_slang ?? true),
+    }
+  }
+  return {
+    normalized: row.model_normalized || row.input_text,
+    translation: row.model_translation || "",
+    isSlang: row.model_is_slang ?? true,
+  }
+}
+
+function normText(value?: string | null) {
+  return (value || "").trim().toLowerCase().replace(/\s+/g, " ")
+}
+
+function draftWasEdited(row: FeedbackRow, draft: Draft): boolean {
+  const seed = seedValues(row)
+  return (
+    normText(draft.expected_normalized) !== normText(seed.normalized) ||
+    normText(draft.expected_translation) !== normText(seed.translation) ||
+    draft.expected_is_slang !== seed.isSlang
+  )
+}
+
 const FAILURE_TYPES = [
+  { value: "correct", label: "Correct", desc: "Model got it right — just flagged for review (e.g. low confidence)" },
   { value: "wrong_slang_sense", label: "Wrong Sense", desc: "Model translated slang with incorrect meaning" },
   { value: "missed_slang", label: "Missed Slang", desc: "Model missed the slang word and treated the sentence as literal" },
   { value: "false_positive", label: "False Positive", desc: "Model incorrectly identified standard English as slang" },
@@ -133,11 +171,27 @@ const COUNT_OPTIONS = [10, 25, 50, 100]
 
 // Helpers
 function makeDraft(row: FeedbackRow): Draft {
+  // For AI-generated/amplified rows, model_* now holds the REAL pipeline
+  // output (SlangDetector + SlangNormalizer + Translator), while GPT's
+  // generation-time guess lives in model_metadata as a suggestion — seed the
+  // reviewer's draft from that suggestion instead of the model's own output,
+  // so "Model" (what the app actually does) and "Expected" (what a human
+  // confirms) stay independent signals. User-report rows have no GPT
+  // suggestion, so they keep seeding from model_* as before.
+  const isAiSourced = AI_SOURCES.includes(row.source)
+  const suggestedNormalized = row.model_metadata?.llm_suggested_normalized
+  const suggestedTranslation = row.model_metadata?.llm_suggested_translation
+  const suggestedIsSlang = row.model_metadata?.llm_suggested_is_slang
+
+  const expectedNormalized = isAiSourced && suggestedNormalized ? suggestedNormalized : (row.model_normalized || row.input_text)
+  const expectedTranslation = isAiSourced && suggestedTranslation ? suggestedTranslation : (row.model_translation || "")
+  const expectedIsSlang = isAiSourced && suggestedIsSlang !== undefined ? suggestedIsSlang : (row.model_is_slang ?? true)
+
   return {
-    expected_normalized: row.model_normalized || row.input_text,
-    expected_translation: row.model_translation || "",
-    expected_is_slang: row.model_is_slang ?? true,
-    failure_type: row.model_is_slang ? "wrong_slang_sense" : "missed_slang",
+    expected_normalized: expectedNormalized,
+    expected_translation: expectedTranslation,
+    expected_is_slang: expectedIsSlang,
+    failure_type: expectedIsSlang ? "wrong_slang_sense" : "missed_slang",
   }
 }
 
@@ -246,8 +300,8 @@ function DatasetHealthSection({
 
           <div className="rounded-lg border bg-background p-3 space-y-1">
             <p className="text-xs text-muted-foreground font-medium">Sources</p>
-            <p className="text-xs"><Bot className="inline w-3 h-3 mr-1" />AI: <span className="font-semibold">{(stats.by_source["ai_generated"] ?? 0).toLocaleString()}</span></p>
-            <p className="text-xs"><User className="inline w-3 h-3 mr-1" />Users: <span className="font-semibold">{(stats.by_source["app"] ?? 0).toLocaleString()}</span></p>
+            <p className="text-xs"><Bot className="inline w-3 h-3 mr-1" />AI: <span className="font-semibold">{AI_SOURCES.reduce((sum, s) => sum + (stats.by_source[s] ?? 0), 0).toLocaleString()}</span></p>
+            <p className="text-xs"><User className="inline w-3 h-3 mr-1" />Users: <span className="font-semibold">{USER_SOURCES.reduce((sum, s) => sum + (stats.by_source[s] ?? 0), 0).toLocaleString()}</span></p>
           </div>
 
           <div className="rounded-lg border bg-background p-3 space-y-1">
@@ -279,6 +333,7 @@ function GenerateBatchSection({ onGenerated }: { onGenerated: () => void }) {
     categories: ["gen_z", "internet"],
     context_style: "text_message",
     slang_mix: 0.6,
+    avoid_overrepresented: true,
   })
   const [generating, setGenerating] = useState(false)
   const [targetWord, setTargetWord] = useState("")
@@ -304,6 +359,9 @@ function GenerateBatchSection({ onGenerated }: { onGenerated: () => void }) {
         ...(targetWord.trim() ? { target_word: targetWord.trim() } : {}),
       })
       toast.success(result.message)
+      if (result.avoided_words.length > 0) {
+        toast.info(`Avoided: ${result.avoided_words.join(", ")}`)
+      }
       setTargetWord("")
       onGenerated()
     } catch (err: unknown) {
@@ -432,6 +490,30 @@ function GenerateBatchSection({ onGenerated }: { onGenerated: () => void }) {
           />
         </div>
 
+        {/* Avoid overrepresented words toggle */}
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="avoid-overrepresented"
+            checked={params.avoid_overrepresented ?? true}
+            onChange={(e) => setParams((p) => ({ ...p, avoid_overrepresented: e.target.checked }))}
+            className="h-4 w-4 rounded border-input"
+          />
+          <label htmlFor="avoid-overrepresented" className="text-sm font-medium cursor-pointer">
+            Avoid words that already have enough examples
+          </label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                Steers the prompt away from words that already have 50+ slang and 30+ neutral examples in your dataset, so the batch doesn&apos;t keep piling more sentences onto words that are already well covered.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
         <Button onClick={handleGenerate} disabled={generating} className="w-full">
           {generating ? (
             <>
@@ -455,7 +537,6 @@ function GenerateBatchSection({ onGenerated }: { onGenerated: () => void }) {
 function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) {
   const [vocab, setVocab] = useState<VocabularyInfo | null>(null)
   const [vocabLoading, setVocabLoading] = useState(true)
-  const [variationsPerWord, setVariationsPerWord] = useState(10)
   const [amplifying, setAmplifying] = useState(false)
 
   const loadVocab = useCallback(async () => {
@@ -481,7 +562,7 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
     }
     setAmplifying(true)
     try {
-      const result = await amplifyVocabulary({ variations_per_word: variationsPerWord })
+      const result = await amplifyVocabulary({})
       toast.success(result.message)
       onAmplified()
       loadVocab()
@@ -493,7 +574,9 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
     }
   }
 
-  const estimatedNew = vocab ? vocab.unique_words * variationsPerWord : 0
+  const wordsBelowTarget = vocab
+    ? vocab.words.filter((w) => !vocab.overrepresented_words.includes(w))
+    : []
 
   return (
     <Card>
@@ -503,8 +586,9 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
           <CardTitle className="text-base font-semibold">Amplify Vocabulary</CardTitle>
         </div>
         <p className="text-sm text-muted-foreground">
-          Generates fresh sentence variations for every slang word already known in your dataset —
-          fixes "too few examples per word" instead of adding new random words.
+          Tops up words that have too few examples in your dataset — ambiguous words (like &quot;chill&quot;
+          or &quot;fire&quot;) get topped up on both slang and literal usage, pure slang words only on slang.
+          Words already well covered are skipped, so this won&apos;t keep flooding them with duplicate content.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -515,29 +599,16 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
           </div>
         ) : (
           <div className="rounded-lg border bg-accent/20 p-3 text-sm">
-            <span className="font-semibold">{vocab?.unique_words ?? 0}</span> unique slang words found in your dataset
+            <span className="font-semibold">{vocab?.unique_words ?? 0}</span> unique words found —{" "}
+            <span className="font-semibold">{wordsBelowTarget.length}</span> below the coverage target
           </div>
         )}
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            Variations per word: <span className="text-primary font-bold">{variationsPerWord}</span>
-          </label>
-          <input
-            type="range"
-            min={4}
-            max={20}
-            step={1}
-            value={variationsPerWord}
-            onChange={(e) => setVariationsPerWord(parseInt(e.target.value, 10))}
-            className="w-full accent-primary"
-          />
-          <p className="text-xs text-muted-foreground">
-            Will generate ~{estimatedNew.toLocaleString()} new sentences
-          </p>
-        </div>
-
-        <Button onClick={handleAmplify} disabled={amplifying || vocabLoading} className="w-full">
+        <Button
+          onClick={handleAmplify}
+          disabled={amplifying || vocabLoading || wordsBelowTarget.length === 0}
+          className="w-full"
+        >
           {amplifying ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -546,7 +617,7 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
           ) : (
             <>
               <Sparkles className="w-4 h-4 mr-2" />
-              Amplify {vocab?.unique_words ?? 0} words
+              Amplify {wordsBelowTarget.length} word{wordsBelowTarget.length === 1 ? "" : "s"}
             </>
           )}
         </Button>
@@ -557,8 +628,23 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+const DEFAULT_PAGE_SIZE = 50
+
+// Sources written by the synthetic dataset generator (app/services/dataset_generator.py) —
+// these never had a real translation attempt, so they're not real translation-quality signal.
+const AI_SOURCES = ["ai_generated", "ai_amplified"]
+// Sources written by actual users reporting a bad result in the app.
+const USER_SOURCES = ["word_book", "word_detail_sentence", "word_detail_word"]
+
 export function AdminFeedbackView() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const page = Math.max(1, Number(searchParams.get("page")) || 1)
+  const pageSize = Number(searchParams.get("pageSize")) || DEFAULT_PAGE_SIZE
+
   const [rows, setRows] = useState<FeedbackRow[]>([])
+  const [total, setTotal] = useState(0)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -569,9 +655,24 @@ export function AdminFeedbackView() {
   const [activeIdx, setActiveIdx] = useState<number>(-1)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [sourceFilter, setSourceFilter] = useState<string>("all")
+  // Defaults to real user reports — the synthetic dataset-generator rows
+  // (ai_generated/ai_amplified) outnumber real reports ~150:1 in needs_review,
+  // so "all" buries the reports admins actually care about here.
+  const [sourceFilter, setSourceFilter] = useState<string>("user")
   const [confidenceFilter, setConfidenceFilter] = useState<string>("all")
   const [isSuggesting, setIsSuggesting] = useState<Record<string, boolean>>({})
+
+  const abortRef = useRef<AbortController | null>(null)
+
+  const updateParams = useCallback(
+    (next: { page?: number; pageSize?: number }) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next.page !== undefined) params.set("page", String(next.page))
+      if (next.pageSize !== undefined) params.set("pageSize", String(next.pageSize))
+      router.push(`?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true)
@@ -586,24 +687,32 @@ export function AdminFeedbackView() {
   }, [])
 
   const loadRows = useCallback(async () => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     try {
-      const data = await getPendingTranslationFeedback()
+      const offset = (page - 1) * pageSize
+      const sources = sourceFilter === "ai" ? AI_SOURCES : sourceFilter === "user" ? USER_SOURCES : undefined
+      const data = await getPendingTranslationFeedback(pageSize, offset, controller.signal, sources)
       // Sort: lowest agreement_confidence first (most uncertain = most valuable to review)
-      const sorted = [...data].sort((a: FeedbackRow, b: FeedbackRow) => {
+      const sorted = [...data.items].sort((a: FeedbackRow, b: FeedbackRow) => {
         const aConf = a.model_metadata?.agreement_confidence ?? 1
         const bConf = b.model_metadata?.agreement_confidence ?? 1
         return aConf - bConf
       })
       setRows(sorted)
+      setTotal(data.total)
       setDrafts(Object.fromEntries(sorted.map((row: FeedbackRow) => [row.id, makeDraft(row)])))
     } catch (err: unknown) {
+      if (isAbortError(err)) return
       const message = err instanceof Error ? err.message : "Erro ao carregar feedbacks"
       toast.error(message)
     } finally {
-      setLoading(false)
+      if (abortRef.current === controller) setLoading(false)
     }
-  }, [])
+  }, [page, pageSize, sourceFilter])
 
   const refreshAll = useCallback(() => {
     loadRows()
@@ -613,7 +722,17 @@ export function AdminFeedbackView() {
   useEffect(() => {
     loadRows()
     loadStats()
+    return () => abortRef.current?.abort()
   }, [loadRows, loadStats])
+
+  // If the current page becomes out of range (e.g. after clearing the last
+  // page's items), snap back to the last valid page.
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
+    if (page > totalPages) {
+      updateParams({ page: totalPages })
+    }
+  }, [page, pageSize, total, updateParams])
 
   const updateDraft = (id: string, patch: Partial<Draft>) => {
     setDrafts((current) => ({
@@ -638,15 +757,24 @@ export function AdminFeedbackView() {
       toast.error("Preencha o normalized English")
       return
     }
+    if (!draft.failure_type.trim()) {
+      toast.error("Select a failure type (or \"Correct\" if the model got it right)")
+      return
+    }
+    if (AI_SOURCES.includes(row.source) && !draftWasEdited(row, draft) && draft.failure_type !== "correct") {
+      toast.error("This still matches GPT's draft — edit it, or set failure type to \"Correct\" if it's actually fine")
+      return
+    }
     setBusyId(row.id)
     try {
       await approveTranslationFeedback(row.id, {
         expected_normalized: draft.expected_normalized,
         expected_translation: draft.expected_translation || null,
         expected_is_slang: draft.expected_is_slang,
-        failure_type: draft.failure_type || "wrong_slang_sense",
+        failure_type: draft.failure_type,
       })
       removeRow(row.id)
+      setTotal((current) => Math.max(0, current - 1))
       toast.success("Feedback aprovado")
       loadStats()
     } catch (err: unknown) {
@@ -662,7 +790,9 @@ export function AdminFeedbackView() {
     try {
       await rejectTranslationFeedback(row.id, status)
       removeRow(row.id)
+      setTotal((current) => Math.max(0, current - 1))
       toast.success(status === "duplicate" ? "Marcado como duplicado" : "Feedback rejeitado")
+      loadStats()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erro ao rejeitar"
       toast.error(message)
@@ -697,14 +827,23 @@ export function AdminFeedbackView() {
     if (selectedIds.length === 0) return
     setBusyId("bulk")
     const loadingToastId = toast.loading(`Approving ${selectedIds.length} items...`)
-    let approved = 0
     let failed = 0
+    let skippedUnreviewed = 0
+    const approvedIds: string[] = []
 
     for (const id of selectedIds) {
       const row = rows.find((r) => r.id === id)
       const draft = drafts[id]
-      if (!row || !draft || !draft.expected_normalized.trim()) {
+      if (!row || !draft || !draft.expected_normalized.trim() || !draft.failure_type.trim()) {
         failed++
+        continue
+      }
+      // Bulk-approve must not let untouched GPT drafts sail through unread —
+      // skip these individually so the reviewer has to open and confirm/edit
+      // each one instead of rubber-stamping a whole page at once. Skipped
+      // rows stay in the list/selection so nothing silently disappears.
+      if (AI_SOURCES.includes(row.source) && !draftWasEdited(row, draft) && draft.failure_type !== "correct") {
+        skippedUnreviewed++
         continue
       }
       try {
@@ -712,24 +851,26 @@ export function AdminFeedbackView() {
           expected_normalized: draft.expected_normalized,
           expected_translation: draft.expected_translation || null,
           expected_is_slang: draft.expected_is_slang,
-          failure_type: draft.failure_type || "wrong_slang_sense",
+          failure_type: draft.failure_type,
         })
-        approved++
+        approvedIds.push(id)
       } catch {
         failed++
       }
     }
 
     toast.dismiss(loadingToastId)
-    toast.success(`Successfully approved ${approved} items.${failed > 0 ? ` Failed: ${failed}` : ""}`)
+    const skippedNote = skippedUnreviewed > 0 ? ` Skipped ${skippedUnreviewed} unreviewed GPT draft(s) — open each one, edit it, or mark it "Correct" individually.` : ""
+    toast.success(`Successfully approved ${approvedIds.length} items.${failed > 0 ? ` Failed: ${failed}` : ""}${skippedNote}`)
 
-    setRows((current) => current.filter((row) => !selectedIds.includes(row.id)))
+    setRows((current) => current.filter((row) => !approvedIds.includes(row.id)))
+    setTotal((current) => Math.max(0, current - approvedIds.length))
     setDrafts((current) => {
       const next = { ...current }
-      selectedIds.forEach((id) => delete next[id])
+      approvedIds.forEach((id) => delete next[id])
       return next
     })
-    setSelectedIds([])
+    setSelectedIds((current) => current.filter((id) => !approvedIds.includes(id)))
     setBusyId(null)
     loadStats()
   }
@@ -754,6 +895,7 @@ export function AdminFeedbackView() {
     toast.success(`Successfully processed ${processed} items.${failed > 0 ? ` Failed: ${failed}` : ""}`)
 
     setRows((current) => current.filter((row) => !selectedIds.includes(row.id)))
+    setTotal((current) => Math.max(0, current - processed))
     setDrafts((current) => {
       const next = { ...current }
       selectedIds.forEach((id) => delete next[id])
@@ -761,6 +903,7 @@ export function AdminFeedbackView() {
     })
     setSelectedIds([])
     setBusyId(null)
+    loadStats()
   }
 
   const toggleSelectAll = () => {
@@ -787,9 +930,9 @@ export function AdminFeedbackView() {
       if (!matchInput && !matchNormalized && !matchTranslation) return false
     }
 
-    if (sourceFilter !== "all" && row.source !== sourceFilter) {
-      return false
-    }
+    // Source filtering happens server-side via the `sources` param (see loadRows) —
+    // it has to, since it changes which rows exist across pages, not just which
+    // of the current page's rows are shown.
 
     if (confidenceFilter !== "all") {
       const conf = row.model_metadata?.agreement_confidence
@@ -909,7 +1052,7 @@ export function AdminFeedbackView() {
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-semibold">Review Queue</h3>
             <Badge variant="outline" className="px-3 py-1">
-              {rows.length} pending
+              {total} pending
             </Badge>
           </div>
           <Button variant="outline" onClick={loadRows} disabled={loading}>
@@ -933,12 +1076,15 @@ export function AdminFeedbackView() {
           <div>
             <select
               value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value)}
+              onChange={(e) => {
+                setSourceFilter(e.target.value)
+                updateParams({ page: 1 })
+              }}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
+              <option value="user">User Reports Only</option>
+              <option value="ai">AI Generated (dataset seeding) Only</option>
               <option value="all">All Sources</option>
-              <option value="ai_generated">AI Generated Only</option>
-              <option value="app">User Reports Only</option>
             </select>
           </div>
 
@@ -973,9 +1119,9 @@ export function AdminFeedbackView() {
           </div>
           <div>
             {filteredRows.length !== rows.length ? (
-              <span>Showing {filteredRows.length} of {rows.length} pending items</span>
+              <span>Showing {filteredRows.length} of {rows.length} pending items on this page</span>
             ) : (
-              <span>{rows.length} pending items total</span>
+              <span>{rows.length} pending items on this page</span>
             )}
           </div>
         </div>
@@ -1030,9 +1176,18 @@ export function AdminFeedbackView() {
         )}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-            <p className="text-muted-foreground">Loading review queue…</p>
+          <div className="space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-4 w-1/3 mt-2" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-20 w-full" />
+                </CardContent>
+              </Card>
+            ))}
           </div>
         ) : filteredRows.length === 0 ? (
           <Card>
@@ -1059,7 +1214,7 @@ export function AdminFeedbackView() {
               const draft = drafts[row.id] || makeDraft(row)
               const disabled = busyId === row.id || busyId === "bulk"
               const confidenceBadge = getConfidenceBadge(row)
-              const isAiGenerated = row.source === "ai_generated"
+              const isAiGenerated = AI_SOURCES.includes(row.source)
               const isFocused = activeIdx === index
               const isSelected = selectedIds.includes(row.id)
 
@@ -1148,6 +1303,11 @@ export function AdminFeedbackView() {
                       <div className="rounded-md border bg-accent/20 p-3">
                         <p className="text-xs font-semibold text-muted-foreground mb-1">Model translation</p>
                         <p className="text-sm">{row.model_translation || "-"}</p>
+                        {(row.model_metadata?.translation_warnings?.model?.length ?? 0) > 0 && (
+                          <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> {row.model_metadata!.translation_warnings!.model!.join(", ")}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -1232,6 +1392,12 @@ export function AdminFeedbackView() {
                       </div>
                     </div>
 
+                    {isAiGenerated && !draftWasEdited(row, draft) && draft.failure_type !== "correct" && (
+                      <p className="text-xs text-amber-600 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> This still matches GPT&apos;s draft — edit it, or set failure type to &quot;Correct&quot; to approve as-is.
+                      </p>
+                    )}
+
                     <div className="flex flex-wrap gap-2 justify-end">
                       <Button
                         variant="outline"
@@ -1262,6 +1428,14 @@ export function AdminFeedbackView() {
                 </Card>
               )
             })}
+
+            <PaginationControls
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={(p) => updateParams({ page: p })}
+              onPageSizeChange={(s) => updateParams({ page: 1, pageSize: s })}
+            />
           </div>
         )}
       </div>

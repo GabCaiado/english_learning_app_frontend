@@ -166,7 +166,7 @@ export function Revisions() {
         setIsFreePractice(true)
         resetCard()
         const data = await getUserWords()
-        setWords(data)
+        setWords(data.items)
       } catch {
         setError("Não foi possível carregar as palavras. Tente novamente.")
       } finally {

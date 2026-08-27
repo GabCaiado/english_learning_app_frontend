@@ -75,9 +75,9 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user) return
     getUserWords()
-      .then((words) => {
-        setWordCount(words.length)
-        setStreak(calculateStreak(words))
+      .then((data) => {
+        setWordCount(data.total)
+        setStreak(calculateStreak(data.items))
       })
       .catch(() => {
         setWordCount(0)

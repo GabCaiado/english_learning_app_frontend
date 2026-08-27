@@ -1,44 +1,87 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { PaginationControls } from "@/components/pagination-controls"
 import { Search, Volume2, Trash2, X, BookOpen, MessageSquare, Sparkles, Loader2, Flag } from "lucide-react"
 import { WordDetailModal } from "@/components/word-detail-modal"
-import { getUserWords, deleteWord, submitTranslationFeedback } from "@/lib/api"
+import { getUserWords, deleteWord, submitTranslationFeedback, isAbortError } from "@/lib/api"
 import { toast } from "sonner"
 
+const DEFAULT_PAGE_SIZE = 50
+
 export function WordsBook() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const page = Math.max(1, Number(searchParams.get("page")) || 1)
+  const pageSize = Number(searchParams.get("pageSize")) || DEFAULT_PAGE_SIZE
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedWord, setSelectedWord] = useState<string | null>(null)
   const [words, setWords] = useState<any[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  const fetchWords = async () => {
+  const abortRef = useRef<AbortController | null>(null)
+
+  const updateParams = useCallback(
+    (next: { page?: number; pageSize?: number }) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next.page !== undefined) params.set("page", String(next.page))
+      if (next.pageSize !== undefined) params.set("pageSize", String(next.pageSize))
+      router.push(`?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
+
+  const fetchWords = useCallback(async () => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    setLoading(true)
     try {
-      const data = await getUserWords()
-      setWords(data)
+      const offset = (page - 1) * pageSize
+      const data = await getUserWords(pageSize, offset, controller.signal)
+      setWords(data.items)
+      setTotal(data.total)
     } catch (err) {
+      if (isAbortError(err)) return
       console.error("Erro ao buscar palavras:", err)
       toast.error("Não foi possível carregar seu caderninho")
     } finally {
-      setLoading(false)
+      if (abortRef.current === controller) setLoading(false)
     }
-  }
+  }, [page, pageSize])
 
   useEffect(() => {
     fetchWords()
-  }, [])
+    return () => abortRef.current?.abort()
+  }, [fetchWords])
+
+  // If the current page becomes out of range (e.g. after deleting the last
+  // word on the last page), snap back to the last valid page.
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
+    if (page > totalPages) {
+      updateParams({ page: totalPages })
+    }
+  }, [page, pageSize, total, updateParams])
 
   const handleDelete = async (id: string, word: string) => {
     if (!confirm(`Tem certeza que deseja excluir "${word}"?`)) return
-    
+
     try {
       await deleteWord(id)
       toast.success("Palavra removida")
-      setWords(words.filter(w => w.id !== id))
+      setWords((current) => current.filter((w) => w.id !== id))
+      setTotal((current) => Math.max(0, current - 1))
     } catch (err) {
       toast.error("Erro ao excluir")
     }
@@ -129,9 +172,15 @@ export function WordsBook() {
 
         {/* Words List */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-            <p className="text-muted-foreground">Carregando seu vocabulário...</p>
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i} className="p-4">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-48" />
+                </div>
+              </Card>
+            ))}
           </div>
         ) : (
           <>
@@ -228,6 +277,14 @@ export function WordsBook() {
                 <p className="text-muted-foreground">Tente buscar por outro termo ou adicione novas palavras</p>
               </div>
             )}
+
+            <PaginationControls
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={(p) => updateParams({ page: p })}
+              onPageSizeChange={(s) => updateParams({ page: 1, pageSize: s })}
+            />
           </>
         )}
       </div>
