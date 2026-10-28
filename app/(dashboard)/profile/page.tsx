@@ -4,13 +4,27 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
-import { Mail, Lock, LogOut, Award, BookOpen, Settings, Eye, EyeOff, Flame } from "lucide-react"
+import {
+  LogOut,
+  Eye,
+  EyeOff,
+  Flame,
+  BookMarked,
+  BookOpen,
+  ShieldCheck,
+  KeyRound,
+  Crown,
+  Star,
+  GraduationCap,
+  CalendarDays,
+  Zap,
+  Library,
+} from "lucide-react"
+import { StatCard, TonalIcon, Pill } from "@/components/shared"
 import { useAuth } from "@/hooks/use-auth"
 import { getUserWords } from "@/lib/api"
+import { PageContainer } from "@/components/layout/page-container"
 
 // ---------------------------------------------------------------------------
 // Streak helpers
@@ -89,201 +103,185 @@ export default function ProfilePage() {
     ? name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()
     : "?"
 
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    : null
+
+  const progressLabel = wordCount === null ? "—" : `${Math.min(wordCount, 100)}%`
+
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      {/* Top banner */}
-      <div className="h-48 bg-gradient-to-r from-primary/20 via-primary/10 to-background border-b" />
+    <PageContainer className="flex flex-col gap-6">
+      {/* ── Banner do perfil ── */}
+      <section className="relative overflow-hidden rounded-panel bg-gradient-banner p-6 text-primary-foreground shadow-card">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-5">
+            <div className="relative shrink-0">
+              <Avatar className="size-20 ring-[3px] ring-warning-strong ring-offset-[3px] ring-offset-primary">
+                <AvatarImage
+                  src={user?.avatar_url ?? undefined}
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-card text-3xl font-extrabold text-primary">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <span
+                aria-hidden="true"
+                className="absolute -bottom-0.5 -right-0.5 flex size-6 items-center justify-center rounded-full bg-warning-strong text-foreground ring-2 ring-primary"
+              >
+                <Star className="size-3.5 fill-current" />
+              </span>
+            </div>
 
-      <div className="container max-w-5xl -mt-24 pb-12 px-4 mx-auto">
-        <div className="grid gap-8 lg:grid-cols-12">
-
-          {/* ── Left column ── */}
-          <div className="lg:col-span-4 h-full">
-            <Card className="shadow-xl bg-card border border-border h-full flex flex-col">
-              <CardHeader className="items-center pt-8 pb-4">
-
-                {/* Avatar */}
-                <div className="relative w-fit mx-auto">
-                  <Avatar className="w-28 h-28 ring-4 ring-background shadow-xl">
-                    <AvatarImage
-                      src={user?.avatar_url ?? undefined}
-                      className="object-cover"
-                    />
-                    <AvatarFallback className="text-3xl font-bold bg-primary text-primary-foreground">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                </div>
-
-                <div className="text-center mt-4 space-y-1">
-                  <CardTitle className="text-xl font-bold">{name}</CardTitle>
-                  <p className="text-muted-foreground text-sm flex items-center justify-center gap-1">
-                    <Mail className="w-3 h-3" />
-                    {email}
-                  </p>
-                  <div className="flex gap-2 justify-center mt-3 flex-wrap">
-                    <Badge variant="secondary" className="bg-primary/10 text-primary border-none">
-                      Nível Iniciante
-                    </Badge>
-                    <Badge variant="outline">Free Plan</Badge>
-                  </div>
-                </div>
-              </CardHeader>
-
-              <Separator />
-
-              {/* Stats — real data */}
-              <CardContent className="grid grid-cols-2 gap-3 p-5">
-                <div className="p-3 rounded-xl bg-accent/50 border border-border text-center">
-                  <p className="text-2xl font-black text-primary">
-                    {wordCount === null ? "—" : wordCount}
-                  </p>
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mt-0.5">
-                    Palavras
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-accent/50 border border-border text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <p className="text-2xl font-black text-orange-500">
-                      {streak === null ? "—" : streak}
-                    </p>
-                    {streak !== null && streak > 0 && (
-                      <Flame className="w-4 h-4 text-orange-500" />
-                    )}
-                  </div>
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mt-0.5">
-                    Streak
-                  </p>
-                </div>
-              </CardContent>
-
-              <div className="flex-1" />
-              <CardFooter className="p-4 border-t">
-                <Button
-                  variant="ghost"
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-2xl font-extrabold tracking-tight">{name}</h1>
+                <Pill
                   size="sm"
-                  onClick={() => signout()}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10 w-full"
+                  icon={Crown}
+                  className="bg-warning-strong font-bold uppercase tracking-wide text-foreground"
                 >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sair da Conta
-                </Button>
-              </CardFooter>
-            </Card>
+                  Free Plan
+                </Pill>
+              </div>
+              <p className="truncate text-sm text-primary-foreground/80">{email}</p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Pill
+                  icon={GraduationCap}
+                  className="bg-primary-foreground/15 text-primary-foreground"
+                >
+                  Nível Iniciante
+                </Pill>
+                {memberSince && (
+                  <Pill
+                    icon={CalendarDays}
+                    className="bg-primary-foreground/15 text-primary-foreground"
+                  >
+                    Membro desde {memberSince}
+                  </Pill>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* ── Right column ── */}
-          <div className="lg:col-span-8 space-y-6">
-
-            {/* Security */}
-            <Card className="shadow-sm">
-              <CardHeader>
-                <div className="flex items-center gap-2 mb-4">
-                  <Settings className="w-5 h-5 text-primary" />
-                  <h2 className="text-xl font-bold tracking-tight">Configurações da Conta</h2>
-                </div>
-                <CardTitle className="text-base flex items-center gap-2 font-bold">
-                  <Lock className="w-4 h-4 text-primary" />
-                  Segurança
-                </CardTitle>
-                <CardDescription>
-                  Proteja sua conta alterando sua senha regularmente.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-2">
-                  <Label htmlFor="password">Nova Senha</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Digite sua nova senha..."
-                      className="bg-accent/30 border-none h-11 pr-10"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      {showPassword
-                        ? <EyeOff className="w-4 h-4" />
-                        : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">Mínimo de 6 caracteres.</p>
-                </div>
-              </CardContent>
-              <CardFooter className="bg-accent/10 border-t flex justify-end p-4">
-                <Button
-                  onClick={() => updatePassword(password)}
-                  className="px-8 font-bold"
-                  disabled={password.length < 6}
-                >
-                  Atualizar Senha
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* Achievements */}
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2 font-bold">
-                  <Award className="w-4 h-4 text-primary" />
-                  Conquistas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-semibold">Vocabulário Geral</span>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] font-bold">
-                      {wordCount === null ? "—" : `${Math.min(wordCount, 100)}%`}
-                    </Badge>
-                  </div>
-                  <div className="h-3 w-full bg-accent rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full transition-all duration-700"
-                      style={{ width: `${Math.min(wordCount ?? 0, 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {wordCount === null ? "" : `${wordCount} de 100 palavras para o próximo nível`}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-4 gap-3 pt-1">
-                  {[
-                    { label: "1ª Palavra", unlocked: (wordCount ?? 0) >= 1 },
-                    { label: "10 Palavras", unlocked: (wordCount ?? 0) >= 10 },
-                    { label: "3 Dias", unlocked: (streak ?? 0) >= 3 },
-                    { label: "7 Dias", unlocked: (streak ?? 0) >= 7 },
-                  ].map((badge) => (
-                    <div
-                      key={badge.label}
-                      className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-1 border-2 transition-colors ${badge.unlocked
-                          ? "bg-primary/10 border-primary/30"
-                          : "bg-accent/30 border-dashed border-muted-foreground/10"
-                        }`}
-                    >
-                      <Award className={`w-7 h-7 ${badge.unlocked ? "text-primary" : "text-muted-foreground/20"}`} />
-                      <p className={`text-[9px] font-bold text-center leading-tight px-1 ${badge.unlocked ? "text-primary" : "text-muted-foreground/30"
-                        }`}>
-                        {badge.label}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
+          <Button
+            variant="destructive"
+            onClick={() => signout()}
+            className="h-10 shrink-0 rounded-lg px-4 font-semibold shadow-card"
+          >
+            <LogOut className="size-4" />
+            Sair da Conta
+          </Button>
         </div>
+      </section>
+
+      {/* ── Stat cards ── */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <StatCard
+          eyebrow="Vocabulário Ativo"
+          value={wordCount === null ? "—" : wordCount}
+          unit={wordCount === null ? undefined : "palavras"}
+          icon={BookMarked}
+          iconTone="primary"
+          subtitle={<><Library />Palavras no seu caderninho</>}
+          subtitleTone="success"
+        />
+        <StatCard
+          eyebrow="Sequência Diária"
+          value={streak === null ? "—" : streak}
+          unit={streak === null ? undefined : streak === 1 ? "dia consecutivo" : "dias consecutivos"}
+          icon={Flame}
+          iconTone="warning"
+          surface="warning"
+          subtitle={<><Zap />Pratique amanhã para manter a chama!</>}
+          subtitleTone="warning"
+        />
       </div>
-    </div>
+
+      {/* ── Duas colunas (~62% / ~38%) ── */}
+      <div className="grid items-stretch gap-6 lg:grid-cols-8">
+        {/* Vocabulário Geral */}
+        <section className="flex flex-col rounded-xl border border-border bg-card p-5 text-card-foreground shadow-card lg:col-span-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <TonalIcon icon={BookOpen} size="sm" />
+              <div>
+                <h2 className="text-lg font-bold leading-tight">Vocabulário Geral</h2>
+                <p className="text-sm text-muted-foreground">
+                  Acompanhe seu progresso rumo ao próximo nível.
+                </p>
+              </div>
+            </div>
+            <Pill size="sm" className="font-bold">{progressLabel}</Pill>
+          </div>
+
+          <div className="mt-5 flex flex-1 flex-col justify-center rounded-xl border border-border bg-muted/60 p-4">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="flex items-center gap-2 font-semibold">
+                <GraduationCap className="size-4 text-primary" />
+                Rumo ao próximo nível
+              </span>
+              <span className="font-bold text-primary">{progressLabel}</span>
+            </div>
+            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-primary-soft">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-700"
+                style={{ width: `${Math.min(wordCount ?? 0, 100)}%` }}
+              />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {wordCount === null ? "" : `${wordCount} de 100 palavras para o próximo nível`}
+            </p>
+          </div>
+        </section>
+
+        {/* Segurança da Conta */}
+        <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-card lg:col-span-3">
+          <div className="flex items-start gap-3 border-b border-border pb-4">
+            <TonalIcon icon={ShieldCheck} size="sm" />
+            <div>
+              <h2 className="text-lg font-bold leading-tight">Segurança da Conta</h2>
+              <p className="text-sm text-muted-foreground">
+                Proteja sua conta alterando sua senha regularmente.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-2">
+            <Label htmlFor="password" className="font-semibold">Nova Senha</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Digite sua nova senha..."
+                className="h-11 rounded-lg border-input bg-card pr-10"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-primary"
+              >
+                {showPassword
+                  ? <EyeOff className="size-4" />
+                  : <Eye className="size-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">Mínimo de 6 caracteres.</p>
+          </div>
+
+          <Button
+            onClick={() => updatePassword(password)}
+            disabled={password.length < 6}
+            className="mt-5 h-11 w-full rounded-lg font-bold"
+          >
+            <KeyRound className="size-4" />
+            Atualizar Senha
+          </Button>
+        </section>
+      </div>
+    </PageContainer>
   )
 }
