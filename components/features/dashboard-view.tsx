@@ -1,18 +1,30 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, BookMarked, Target, Flame, Calendar, Sparkles, TrendingUp, Trophy } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import {
+  Plus,
+  Flame,
+  Sparkles,
+  Trophy,
+  Search,
+  Zap,
+  CalendarCheck,
+  CheckCircle2,
+  Star,
+  Bookmark,
+  RotateCw,
+  BrainCircuit,
+} from "lucide-react"
+import { EyebrowLabel, Pill, StatCard } from "@/components/shared"
 import { Progress } from "@/components/ui/progress"
-import { Area, AreaChart, XAxis, YAxis, CartesianGrid } from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { cn } from "@/lib/utils"
 import { addWord, getWordsForReview, getWordOfTheDay, getWeeklyProgress, type WordOfTheDay, type DailyWordCount } from "@/lib/api"
 import { getLevelProgress } from "@/lib/leveling"
 import { useEffect, useState } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
+import { PageContainer } from "@/components/layout/page-container"
 
 interface DashboardProps {
   onNavigateToRevisions: () => void
@@ -25,6 +37,28 @@ interface ReviewItem {
 }
 
 const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+
+const LEVEL_LABELS: Record<string, string> = {
+  beginner: "Iniciante",
+  intermediate: "Intermediário",
+  advanced: "Avançado",
+}
+
+// Highlights the first case-insensitive occurrence of `term` inside `sentence`.
+function highlightTerm(sentence: string, term: string) {
+  if (!term) return sentence
+  const idx = sentence.toLowerCase().indexOf(term.toLowerCase())
+  if (idx < 0) return sentence
+  return (
+    <>
+      {sentence.slice(0, idx)}
+      <mark className="rounded-md bg-primary-soft px-1 font-semibold text-primary-soft-foreground">
+        {sentence.slice(idx, idx + term.length)}
+      </mark>
+      {sentence.slice(idx + term.length)}
+    </>
+  )
+}
 
 export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
   const { user } = useAuth()
@@ -101,276 +135,304 @@ export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
 
   const levelProgress = getLevelProgress(user?.total_xp ?? 0)
 
-  const stats = [
-    { label: "Sequência Diária", value: String(user?.current_streak ?? 0), icon: Flame, color: "text-orange-500" },
-    { label: "Meta Diária", value: String(user?.daily_goal ?? 10), icon: Calendar, color: "text-blue-500" },
-  ]
+  const currentStreak = user?.current_streak ?? 0
+  const dailyGoal = user?.daily_goal ?? 10
+  // weekly endpoint returns a rolling 7-day window ending today (word_service.get_weekly_progress)
+  const todayCount = weeklyProgress.length > 0 ? weeklyProgress[weeklyProgress.length - 1].count : 0
+  const dailyGoalPercentage = dailyGoal > 0 ? Math.min(100, Math.round((todayCount / dailyGoal) * 100)) : 0
+  const xpRemaining = Math.max(0, levelProgress.xpToNextLevel - levelProgress.currentLevelXp)
+  const levelLabel = user?.learning_level
+    ? (LEVEL_LABELS[user.learning_level.toLowerCase()] ?? user.learning_level)
+    : null
 
   const weeklyGoalCurrent = weeklyProgress.reduce((sum, d) => sum + d.count, 0)
   const weeklyGoalTarget = user?.daily_goal ?? 10
   const weeklyGoalPercentage = weeklyGoalTarget > 0
     ? Math.min(100, Math.round((weeklyGoalCurrent / weeklyGoalTarget) * 100))
     : 0
+  const weeklyRemaining = Math.max(0, weeklyGoalTarget - weeklyGoalCurrent)
+  const maxProgress = Math.max(1, ...progressData.map((d) => d.words))
 
   return (
-    <div className="p-8 max-w-10/12 mx-auto">
+    <PageContainer>
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <BookMarked className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">DASHBOARD</p>
-            <h2 className="text-3xl font-bold text-foreground">Olá, {userName}</h2>
-          </div>
-        </div>
-        <p className="text-xl text-primary font-medium">Vamos aprender novas palavras hoje!</p>
-      </div>
+      <header className="mb-6">
+        <EyebrowLabel tone="primary">Dashboard</EyebrowLabel>
+        <h1 className="mt-2 text-4xl font-extrabold leading-tight tracking-tight text-foreground">
+          Olá, {userName}! 👋
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Vamos expandir seu vocabulário e dominar novas gírias hoje!
+        </p>
+      </header>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="border-border/50 hover:border-primary/50 transition-colors">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Nível</p>
-                <p className="text-3xl font-bold text-foreground">{levelProgress.level}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center text-primary">
-                <Trophy className="w-6 h-6" />
-              </div>
-            </div>
-            <Progress value={levelProgress.progressPercent} className="h-2" />
-            <p className="text-xs text-muted-foreground mt-2">
+      <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-3">
+        <StatCard
+          className="rounded-panel"
+          eyebrow="Nível"
+          value={`Nível ${levelProgress.level}`}
+          subtitle={levelLabel ?? undefined}
+          icon={Trophy}
+          iconTone="primary"
+          divider={false}
+        >
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-foreground">Progresso de XP</span>
+            <span className="font-bold text-foreground">
               {levelProgress.currentLevelXp} / {levelProgress.xpToNextLevel} XP
-            </p>
-          </CardContent>
-        </Card>
-        {stats.map((stat, index) => (
-          <Card key={index} className="border-border/50 hover:border-primary/50 transition-colors">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-                  <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                </div>
-                <div className={`w-12 h-12 rounded-xl bg-accent flex items-center justify-center ${stat.color}`}>
-                  <stat.icon className="w-6 h-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+            </span>
+          </div>
+          <Progress value={levelProgress.progressPercent} className="mt-2 h-2 bg-primary-soft" />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Faltam {xpRemaining} XP para o Nível {levelProgress.level + 1}
+          </p>
+        </StatCard>
+
+        <StatCard
+          className="rounded-panel"
+          eyebrow="Sequência Diária"
+          value={`${currentStreak} ${currentStreak === 1 ? "dia" : "dias"}`}
+          subtitle={currentStreak > 0 ? <Pill variant="warning" size="sm">Streak ativo!</Pill> : undefined}
+          icon={Flame}
+          iconTone="warning"
+        >
+          <p className="flex items-start gap-2 text-sm text-foreground">
+            <Zap className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+            {currentStreak > 0
+              ? `Em chamas hoje! Complete uma lição para garantir o ${currentStreak + 1}º dia.`
+              : "Adicione uma palavra hoje para começar sua sequência."}
+          </p>
+        </StatCard>
+
+        <StatCard
+          className="rounded-panel"
+          eyebrow="Meta Diária"
+          value={`${dailyGoal} palavras`}
+          subtitle="Meta de Vocabulário"
+          subtitleTone="success"
+          icon={CalendarCheck}
+          iconTone="success"
+        >
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="flex items-center gap-2 text-foreground">
+              <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
+              {todayCount} de {dailyGoal} concluídas hoje
+            </span>
+            <span className="font-bold text-success">{dailyGoalPercentage}%</span>
+          </div>
+        </StatCard>
       </div>
 
       {/* Add New Word */}
-      <Card className="border-primary/20 bg-accent/30 mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-primary" />
-            Adicionar Nova Palavra
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">Descubriu uma palavra nova? Adicione ao seu dicionário!</p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
+      <section className="mb-6 rounded-panel border border-border bg-card p-5 shadow-card">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <Search
+              className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <Input
-              placeholder="Digite a palavra em inglês..."
+              placeholder="Digite uma palavra ou gíria em inglês..."
               value={newWord}
               onChange={(e) => setNewWord(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddWord()}
-              className="flex-1"
+              className="h-11 rounded-xl border-border bg-muted/40 pl-10 text-sm shadow-none"
               disabled={loading}
+              aria-label="Nova palavra em inglês"
             />
-            <Button
-              className="bg-primary hover:bg-primary/90"
-              onClick={handleAddWord}
-              disabled={loading}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              {loading ? "Adicionando..." : "Adicionar"}
-            </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            A IA irá buscar traduções, exemplos e pronúncia automaticamente
-          </p>
-        </CardContent>
-      </Card>
+          <Button
+            className="h-11 rounded-xl px-6 font-semibold"
+            onClick={handleAddWord}
+            disabled={loading}
+          >
+            <Plus className="size-4" />
+            {loading ? "Adicionando..." : "Adicionar"}
+          </Button>
+        </div>
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Sparkles className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+          A IA busca traduções, contexto de formalidade e pronúncia automaticamente.
+        </p>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[3fr_2fr]">
+        {/* Left column */}
+        <div className="flex min-w-0 flex-col gap-5">
+          {/* Palavra do Dia */}
+          <section className="relative overflow-hidden rounded-panel border border-border bg-card p-6 shadow-card">
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary to-warning-strong"
+            />
+            <EyebrowLabel tone="primary" icon={Star}>
               Palavra do Dia
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Uma palavra nova para você aprender</p>
-          </CardHeader>
-          <CardContent>
+            </EyebrowLabel>
             {wordOfTheDay ? (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-2xl font-bold text-foreground mb-2">{wordOfTheDay.word}</h3>
-                  <p className="text-lg text-muted-foreground">{wordOfTheDay.translation_pt}</p>
-                </div>
+              <div className="mt-4">
+                <h2 className="text-[26px] font-extrabold leading-tight tracking-tight text-foreground">
+                  {wordOfTheDay.word}
+                </h2>
+                <p className="mt-1 text-lg font-semibold text-warning-strong">
+                  {wordOfTheDay.translation_pt}
+                </p>
+                {wordOfTheDay.meaning_pt && (
+                  <p className="mt-1 text-sm text-muted-foreground">{wordOfTheDay.meaning_pt}</p>
+                )}
                 {wordOfTheDay.example && (
-                  <div className="p-3 rounded-lg bg-background/50 border border-border">
-                    <p className="text-sm text-foreground italic mb-1">{wordOfTheDay.example}</p>
+                  <div className="mt-4 space-y-2 rounded-xl border border-border bg-primary-soft/40 p-4 text-sm">
+                    <p className="flex gap-2 text-foreground">
+                      <span className="shrink-0 pt-0.5 text-xs font-bold text-muted-foreground">EN</span>
+                      <span>&ldquo;{highlightTerm(wordOfTheDay.example, wordOfTheDay.word)}&rdquo;</span>
+                    </p>
                     {wordOfTheDay.example_pt && (
-                      <p className="text-xs text-muted-foreground">{wordOfTheDay.example_pt}</p>
+                      <p className="flex gap-2 border-t border-border pt-2 text-muted-foreground">
+                        <span className="shrink-0 pt-0.5 text-xs font-bold">PT</span>
+                        <span>&ldquo;{wordOfTheDay.example_pt}&rdquo;</span>
+                      </p>
                     )}
                   </div>
                 )}
                 <Button
-                  className="w-full bg-primary hover:bg-primary/90"
+                  className="mt-5 h-12 w-full rounded-xl font-semibold"
                   onClick={handleAddWordOfTheDay}
                   disabled={addingWordOfDay}
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  {addingWordOfDay ? "Adicionando..." : "Adicionar ao meu dicionário"}
+                  <Bookmark className="size-4" />
+                  {addingWordOfDay ? "Adicionando..." : "Adicionar ao meu caderninho"}
                 </Button>
               </div>
             ) : (
-              <div className="text-center py-6 text-sm text-muted-foreground">
+              <div className="py-8 text-center text-sm text-muted-foreground">
                 {wordOfTheDayError
                   ? "Não foi possível buscar uma palavra do dia agora. Tente novamente mais tarde."
                   : "Carregando..."}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </section>
 
-        <Card className="border-success/30 bg-success/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-success" />
-              Próximo Objetivo
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Meta semanal de aprendizado</p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="text-center">
-                <p className="text-5xl font-bold text-foreground mb-2">
-                  {weeklyGoalCurrent}
-                  <span className="text-2xl text-muted-foreground">/{weeklyGoalTarget}</span>
+          {/* Seu Progresso */}
+          <section className="flex flex-1 flex-col rounded-panel border border-border bg-card p-6 shadow-card">
+            <EyebrowLabel>Consistência</EyebrowLabel>
+            <h2 className="mt-1.5 text-xl font-bold text-foreground">Seu Progresso</h2>
+            <div className="mt-4 flex flex-1 flex-col justify-end rounded-xl bg-primary-soft/40 px-4 pb-3 pt-4">
+              {progressData.length > 0 ? (
+                <>
+                  <div className="flex h-[150px] items-end gap-2 sm:gap-3">
+                    {progressData.map((d, i) => {
+                      const isToday = i === progressData.length - 1
+                      return (
+                        <div
+                          key={`${d.day}-${i}`}
+                          className="flex flex-1 flex-col items-center justify-end gap-1.5"
+                        >
+                          <span
+                            className={cn(
+                              "text-xs font-semibold",
+                              isToday ? "text-primary" : "text-foreground",
+                            )}
+                          >
+                            {d.words}
+                          </span>
+                          <div
+                            className={cn("w-full rounded-t-lg", isToday ? "bg-primary" : "bg-primary-soft")}
+                            style={{ height: `${Math.max(6, Math.round((d.words / maxProgress) * 120))}px` }}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-2 flex gap-2 sm:gap-3">
+                    {progressData.map((d, i) => (
+                      <span
+                        key={`${d.day}-l-${i}`}
+                        className={cn(
+                          "flex-1 text-center text-xs font-medium",
+                          i === progressData.length - 1 ? "text-primary" : "text-muted-foreground",
+                        )}
+                      >
+                        {d.day}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  Sem dados de progresso ainda.
                 </p>
-                <p className="text-sm text-muted-foreground">palavras esta semana</p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progresso</span>
-                  <span className="font-semibold text-success">{weeklyGoalPercentage}%</span>
-                </div>
-                <Progress value={weeklyGoalPercentage} className="h-3" />
-                <p className="text-xs text-muted-foreground text-center">
-                  {weeklyGoalCurrent >= weeklyGoalTarget
-                    ? "Meta semanal atingida! 🎉"
-                    : `Faltam apenas ${weeklyGoalTarget - weeklyGoalCurrent} palavras para atingir sua meta!`}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full border-success text-success hover:bg-success/10 bg-transparent"
-              >
-                Ver todas as metas
-              </Button>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Total de {weeklyGoalCurrent} novas palavras assimiladas nos últimos 7 dias
+            </p>
+          </section>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              Seu Progresso
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Palavras aprendidas nos últimos 7 dias</p>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                words: {
-                  label: "Palavras",
-                  color: "hsl(var(--primary))",
-                },
-              }}
-              className="h-[260px] w-full"
-            >
-              <AreaChart data={progressData} margin={{ top: 10, right: 12, left: -12, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="fillWords" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-words)" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="var(--color-words)" stopOpacity={0.05} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="day"
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                  width={28}
-                  allowDecimals={false}
-                />
-                <ChartTooltip content={<ChartTooltipContent />} cursor={{ stroke: "hsl(var(--border))" }} />
-                <Area
-                  type="monotone"
-                  dataKey="words"
-                  stroke="var(--color-words)"
-                  strokeWidth={3}
-                  fill="url(#fillWords)"
-                  activeDot={{ r: 5, strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+        {/* Right column */}
+        <div className="flex min-w-0 flex-col gap-5">
+          {/* Meta Semanal */}
+          <section className="rounded-panel border border-border bg-card p-6 shadow-card">
+            <div className="flex items-center justify-between gap-2">
+              <EyebrowLabel>Próximo Objetivo</EyebrowLabel>
+              {weeklyRemaining > 0 ? (
+                <Pill variant="destructive" size="sm">
+                  Faltam {weeklyRemaining} palavras
+                </Pill>
+              ) : (
+                <Pill variant="success" size="sm">
+                  Meta atingida! 🎉
+                </Pill>
+              )}
+            </div>
+            <h2 className="mt-3 text-lg font-bold text-foreground">Meta Semanal de Vocabulário</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {weeklyGoalCurrent} / {weeklyGoalTarget} palavras aprendidas esta semana
+            </p>
+            <Progress
+              value={weeklyGoalPercentage}
+              className="mt-4 h-2 bg-primary-soft"
+              aria-label="Progresso da meta semanal"
+            />
+          </section>
 
-        <Card className="border-orange-500/30 bg-orange-500/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Flame className="w-5 h-5 text-orange-500" />
-              Revisão Inteligente
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Palavras que precisam ser revisadas hoje</p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          {/* Revisão Inteligente */}
+          <section className="flex flex-1 flex-col rounded-panel border border-border bg-card p-6 shadow-card">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                <BrainCircuit className="size-5 text-primary" aria-hidden="true" />
+                Revisão Inteligente
+              </h2>
+              {reviewList.length > 0 && (
+                <Pill variant="primary" size="sm">
+                  {reviewList.length} pendentes
+                </Pill>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Palavras prestes a sumir da sua memória de longo prazo segundo o algoritmo de repetição espaçada.
+            </p>
+            <div className="mb-4 mt-4 space-y-3">
               {reviewList.length > 0 ? (
                 reviewList.map((item, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-orange-500/50 transition-colors"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-primary-soft/40 p-3.5"
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-foreground">{item.word}</p>
-                        <Badge
-                          variant={
-                            item.mastery_level === "new" ? "destructive" : "default"
-                          }
-                          className="text-xs"
-                        >
-                          {item.mastery_level === "new" ? "Urgente" : "Revisão"}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{item.translation}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-foreground">{item.word}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{item.translation}</p>
+                      <Pill
+                        variant={item.mastery_level === "new" ? "destructive" : "warning"}
+                        size="sm"
+                        className="mt-2 uppercase"
+                      >
+                        {item.mastery_level === "new" ? "Urgente" : "Revisar"}
+                      </Pill>
                     </div>
                     <Button
                       size="sm"
-                      variant="ghost"
-                      className="text-orange-500 hover:text-orange-600 hover:bg-orange-500/10"
+                      className="shrink-0 rounded-lg px-4 font-semibold"
                       onClick={onNavigateToRevisions}
                     >
                       Revisar
@@ -378,22 +440,18 @@ export function Dashboard({ onNavigateToRevisions }: DashboardProps) {
                   </div>
                 ))
               ) : (
-                <div className="text-center py-6 text-sm text-muted-foreground">
+                <div className="py-6 text-center text-sm text-muted-foreground">
                   Nenhuma palavra para revisar hoje! 🎉
                 </div>
               )}
             </div>
-            <Button
-              variant="outline"
-              className="w-full mt-4 border-orange-500 text-orange-500 hover:bg-orange-500/10 bg-transparent"
-              onClick={onNavigateToRevisions}
-            >
-              Ver todas as revisões
+            <Button className="mt-auto h-12 w-full rounded-xl font-semibold" onClick={onNavigateToRevisions}>
+              <RotateCw className="size-4" />
+              Ver todas as revisões{reviewList.length > 0 ? ` (${reviewList.length} pendentes)` : ""}
             </Button>
-          </CardContent>
-        </Card>
+          </section>
+        </div>
       </div>
-
-    </div>
+    </PageContainer>
   )
 }
