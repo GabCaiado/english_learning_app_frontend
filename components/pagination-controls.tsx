@@ -16,6 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
+
+const navLinkClass =
+  "h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-none hover:bg-muted"
 
 function getPageWindow(current: number, total: number): (number | "ellipsis")[] {
   const delta = 1
@@ -38,6 +42,7 @@ export function PaginationControls({
   pageSizeOptions = [25, 50, 100],
   onPageChange,
   onPageSizeChange,
+  itemLabel = "itens",
 }: {
   page: number
   pageSize: number
@@ -45,6 +50,7 @@ export function PaginationControls({
   pageSizeOptions?: number[]
   onPageChange: (page: number) => void
   onPageSizeChange: (pageSize: number) => void
+  itemLabel?: string
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1
@@ -52,19 +58,28 @@ export function PaginationControls({
   const pageWindow = getPageWindow(page, totalPages)
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-2">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex flex-col items-center justify-between gap-3 py-2 sm:flex-row">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
         <span>
-          {rangeStart}–{rangeEnd} of {total}
+          Mostrando{" "}
+          <span className="font-bold text-foreground">
+            {rangeStart}–{rangeEnd}
+          </span>{" "}
+          de <span className="font-bold text-foreground">{total}</span> {itemLabel}
         </span>
+        <span aria-hidden="true" className="h-4 w-px bg-border" />
+        <span className="text-xs">Exibir:</span>
         <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-          <SelectTrigger size="sm" className="w-auto min-w-[110px]">
+          <SelectTrigger
+            size="sm"
+            className="h-8 w-auto min-w-[110px] rounded-lg border-border bg-card text-xs font-semibold text-foreground shadow-none"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {pageSizeOptions.map((opt) => (
               <SelectItem key={opt} value={String(opt)}>
-                {opt} / page
+                {opt} por página
               </SelectItem>
             ))}
           </SelectContent>
@@ -78,7 +93,7 @@ export function PaginationControls({
               <PaginationPrevious
                 href="#"
                 aria-disabled={page <= 1}
-                className={page <= 1 ? "pointer-events-none opacity-50" : ""}
+                className={cn(navLinkClass, page <= 1 ? "pointer-events-none opacity-50" : "")}
                 onClick={(e) => {
                   e.preventDefault()
                   if (page > 1) onPageChange(page - 1)
@@ -89,13 +104,19 @@ export function PaginationControls({
             {pageWindow.map((entry, idx) =>
               entry === "ellipsis" ? (
                 <PaginationItem key={`ellipsis-${idx}`}>
-                  <PaginationEllipsis />
+                  <PaginationEllipsis className="size-8 text-muted-foreground" />
                 </PaginationItem>
               ) : (
                 <PaginationItem key={entry}>
                   <PaginationLink
                     href="#"
                     isActive={entry === page}
+                    className={cn(
+                      "size-8 rounded-lg text-sm font-semibold",
+                      entry === page
+                        ? "border-transparent bg-primary text-primary-foreground shadow-none hover:bg-primary hover:text-primary-foreground"
+                        : "text-muted-foreground hover:bg-primary-soft hover:text-primary",
+                    )}
                     onClick={(e) => {
                       e.preventDefault()
                       onPageChange(entry)
@@ -111,7 +132,7 @@ export function PaginationControls({
               <PaginationNext
                 href="#"
                 aria-disabled={page >= totalPages}
-                className={page >= totalPages ? "pointer-events-none opacity-50" : ""}
+                className={cn(navLinkClass, page >= totalPages ? "pointer-events-none opacity-50" : "")}
                 onClick={(e) => {
                   e.preventDefault()
                   if (page < totalPages) onPageChange(page + 1)

@@ -3,12 +3,24 @@
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { BookOpen, LayoutDashboard, Users, Flame, LogOut, ShieldCheck } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import {
+  BookOpen,
+  LayoutDashboard,
+  RotateCcw,
+  User,
+  LogOut,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getUserProfile } from "@/lib/api"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
+import { Pill } from "@/components/shared"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
+import { cn } from "@/lib/utils"
+
+type NavItem = { label: string; href: string; icon: LucideIcon; count?: number }
 
 export function Sidebar() {
   const router = useRouter()
@@ -40,11 +52,18 @@ export function Sidebar() {
 
   const userInitial = user?.email?.[0]?.toUpperCase() || "U"
   const userDisplayName = user?.full_name || user?.username || user?.email?.split("@")[0] || "Usuário"
+  const userInitials =
+    userDisplayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]!.toUpperCase())
+      .join("") || userInitial
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Words Book", href: "/words", icon: BookOpen },
-    { label: "Revisões", href: "/revisions", icon: Flame },
+    { label: "Meu Caderninho", href: "/words", icon: BookOpen },
+    { label: "Revisões", href: "/revisions", icon: RotateCcw },
   ]
 
   if (role === "admin") {
@@ -52,72 +71,88 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 border-r border-border bg-card flex flex-col">
-      {/* Logo & Brand */}
-      <div className="p-6 border-b border-border">
-        <Link href="/dashboard" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-            <BookOpen className="w-6 h-6 text-primary-foreground" />
+    <aside className="flex h-full w-60 lg:w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      {/* Brand */}
+      <div className="px-4 pt-5 pb-4">
+        <Link href="/dashboard" className="flex items-center gap-2.5 transition-opacity hover:opacity-90">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <BookOpen className="size-5" />
+          </span>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-lg font-bold text-primary">Daily Words</p>
+            <p className="truncate text-xs text-muted-foreground">Inglês descomplicado</p>
           </div>
-          <h1 className="font-bold text-xl text-foreground">Daily Words</h1>
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-3">Seções</p>
+      <nav className="flex-1 overflow-y-auto px-3 py-2">
+        <ul className="space-y-1">
           {navItems.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
+            const Icon = item.icon
             return (
-              <Button
-                key={item.href}
-                asChild
-                variant={isActive ? "secondary" : "ghost"}
-                className="w-full justify-start"
-              >
-                <Link href={item.href}>
-                  <item.icon className="w-4 h-4 mr-3" />
-                  {item.label}
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors",
+                    isActive
+                      ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                      : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-[18px] shrink-0" />
+                  <span className="flex-1 truncate">{item.label}</span>
+                  {typeof item.count === "number" && (
+                    <Pill variant="solid" size="sm" className="min-w-5 justify-center">
+                      {item.count}
+                    </Pill>
+                  )}
                 </Link>
-              </Button>
+              </li>
             )
           })}
-        </div>
+        </ul>
       </nav>
 
-      {/* User Section */}
-      <div className="p-4 border-t border-border space-y-4">
-        <Button variant="outline" className="w-full bg-transparent">
-          <Users className="w-4 h-4 mr-2" />
-          Convidar Amigos
-        </Button>
-
-        <Link 
-          href="/profile" 
-          className="flex items-center gap-3 p-2 rounded-lg bg-accent/50 border border-border/50 hover:bg-accent transition-colors group"
+      {/* User footer */}
+      <div className="shrink-0 space-y-3 border-t border-sidebar-border p-3 pb-5">
+        <Link
+          href="/profile"
+          className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-2.5 transition-colors hover:bg-muted"
         >
-          <Avatar className="w-10 h-10 border-2 border-primary/20 group-hover:border-primary/40 transition-colors">
+          <Avatar className="size-9">
             <AvatarImage src={user?.avatar_url ?? undefined} />
-            <AvatarFallback className="bg-primary text-primary-foreground font-bold italic">{userInitial}</AvatarFallback>
+            <AvatarFallback className="bg-primary-soft text-xs font-bold text-primary-soft-foreground">
+              {userInitials}
+            </AvatarFallback>
           </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-foreground truncate">{userDisplayName}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-            {role === "admin" && (
-              <p className="text-xs font-semibold text-primary">admin</p>
-            )}
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="truncate text-sm font-semibold text-foreground">{userDisplayName}</p>
+              {role === "admin" && (
+                <Pill size="sm" className="shrink-0">admin</Pill>
+              )}
+            </div>
+            <p className="truncate text-xs text-muted-foreground" title={user?.email ?? undefined}>
+              {user?.email}
+            </p>
           </div>
         </Link>
 
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-4 h-4 mr-3" />
-          Sair da Conta
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-destructive/30 px-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive-soft"
+          >
+            <LogOut className="size-4" />
+            Sair
+          </button>
+          <ThemeToggle />
+        </div>
       </div>
     </aside>
   )
