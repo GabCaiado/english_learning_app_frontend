@@ -7,7 +7,25 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BookMarked, Loader2, Mail, Lock, Sparkles, Eye, EyeOff, CheckCircle2, XCircle, AlertCircle, ArrowLeft, MailCheck } from "lucide-react"
+import { EyebrowLabel, SegmentedProgress } from "@/components/shared"
+import {
+  BookOpen,
+  Loader2,
+  Mail,
+  Lock,
+  Sparkles,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  MailCheck,
+  LogIn,
+  UserPlus,
+  History,
+} from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
@@ -35,18 +53,38 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
 }
 
-function getPasswordStrength(password: string): { label: string; color: string; width: string } | null {
+type StrengthTone = "destructive" | "warning" | "success"
+
+function getPasswordStrength(password: string): { label: string; value: number; tone: StrengthTone } | null {
   if (!password) return null
   const hasUpper = /[A-Z]/.test(password)
   const hasNumber = /[0-9]/.test(password)
   const hasSpecial = /[^A-Za-z0-9]/.test(password)
   const isLong = password.length >= 8
   const score = [isLong, hasUpper, hasNumber, hasSpecial].filter(Boolean).length
-  if (score <= 1) return { label: "Fraca", color: "bg-red-500", width: "25%" }
-  if (score === 2) return { label: "Razoável", color: "bg-orange-400", width: "50%" }
-  if (score === 3) return { label: "Boa", color: "bg-yellow-500", width: "75%" }
-  return { label: "Forte", color: "bg-green-500", width: "100%" }
+  if (score <= 1) return { label: "Fraca", value: 1, tone: "destructive" }
+  if (score === 2) return { label: "Razoável", value: 2, tone: "warning" }
+  if (score === 3) return { label: "Boa", value: 3, tone: "warning" }
+  return { label: "Forte", value: 3, tone: "success" }
 }
+
+const strengthTextClass: Record<StrengthTone, string> = {
+  destructive: "text-destructive",
+  warning: "text-warning",
+  success: "text-success",
+}
+
+const fieldLabel = "text-xs font-semibold text-foreground"
+const fieldIcon = "pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground"
+const fieldInput = "h-11 rounded-[10px] bg-card pl-10 text-sm shadow-none placeholder:text-muted-foreground/70 dark:bg-card"
+const fieldInputError = "border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20"
+const trailingBtn = "absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-primary"
+const fieldError = "mt-1.5 flex items-center gap-1 text-xs text-destructive"
+const primaryBtn = "h-11 w-full rounded-[10px] text-sm font-semibold shadow-md shadow-primary/25"
+const apiErrorBox =
+  "flex items-start gap-2 rounded-[10px] border border-destructive/20 bg-destructive-soft px-3 py-2.5 text-sm text-destructive-soft-foreground"
+const tabTrigger =
+  "h-full rounded-lg text-sm font-semibold text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-sm dark:text-muted-foreground dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-card dark:data-[state=active]:text-primary"
 
 type LoginErrors = { email?: string; password?: string }
 type SignupErrors = { email?: string; password?: string; confirmPassword?: string }
@@ -247,81 +285,79 @@ export default function LoginPage() {
   const passwordsMatch = confirmPassword.length > 0 && confirmPassword === signupPassword
 
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden -z-10">
-        <div className="absolute top-[10%] left-[10%] w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-[10%] right-[10%] w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+    <div className="relative isolate flex h-screen items-center justify-center overflow-y-auto bg-background bg-gradient-to-br from-primary-soft/60 via-background to-primary-soft/40 p-4">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div className="absolute -left-24 -top-24 size-96 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-24 size-[28rem] rounded-full bg-banner-to/10 blur-3xl" />
       </div>
 
-      <Card className="w-full max-w-md border-2 shadow-2xl backdrop-blur-sm bg-background/80">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 transform hover:scale-105 transition-transform">
-            <BookMarked className="w-10 h-10 text-primary-foreground" />
+      <Card className="w-full max-w-[390px] gap-0 rounded-panel border-border/70 bg-card py-6 shadow-card">
+        <CardHeader className="gap-0 px-6 pb-5 text-center">
+          <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-xl bg-gradient-banner shadow-lg shadow-primary/30">
+            <BookOpen className="size-5 text-primary-foreground" aria-hidden="true" />
           </div>
-          <div className="space-y-1">
-            <CardTitle className="text-3xl font-bold tracking-tight">English Slang App</CardTitle>
-            <CardDescription className="text-base">Seu dicionário inteligente de gírias</CardDescription>
-          </div>
+          <CardTitle className="text-2xl font-extrabold tracking-tight">English Slang App</CardTitle>
+          <CardDescription className="mt-1.5 text-[13px]">Seu dicionário inteligente de gírias e vocabulário</CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="px-6">
           {view === "forgot" ? (
             <div className="space-y-4">
               <button
                 type="button"
                 onClick={backToLogin}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="size-4" aria-hidden="true" />
                 Voltar para o login
               </button>
 
               {forgotSent ? (
                 <div className="flex flex-col items-center gap-4 py-6 text-center">
-                  <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-950/40 flex items-center justify-center">
-                    <MailCheck className="w-8 h-8 text-green-600 dark:text-green-400" />
+                  <div className="flex size-16 items-center justify-center rounded-full bg-success-soft">
+                    <MailCheck className="size-8 text-success" aria-hidden="true" />
                   </div>
                   <div className="space-y-1">
-                    <p className="font-semibold text-base">Verifique seu e-mail</p>
-                    <p className="text-sm text-muted-foreground px-4">
+                    <p className="text-base font-bold">Verifique seu e-mail</p>
+                    <p className="px-4 text-sm text-muted-foreground">
                       Se <span className="font-medium text-foreground">{forgotEmail}</span> estiver cadastrado,
                       você receberá um link para redefinir sua senha em breve.
                     </p>
                   </div>
-                  <div className="w-full space-y-2 mt-2">
+                  <div className="mt-2 w-full space-y-2">
                     <Button
-                      className="w-full"
+                      className={primaryBtn}
                       onClick={handleResend}
                       disabled={resendCooldown > 0 || resendLoading}
                     >
                       {resendLoading ? (
-                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando…</>
+                        <><Loader2 className="size-4 mr-2 animate-spin" /> Enviando…</>
                       ) : resendCooldown > 0 ? (
                         `Reenviar em ${resendCooldown}s`
                       ) : (
                         "Reenviar e-mail"
                       )}
                     </Button>
-                    <Button variant="outline" className="w-full" onClick={backToLogin}>
+                    <Button variant="outline" className="h-11 w-full rounded-[10px]" onClick={backToLogin}>
                       Voltar para o login
                     </Button>
                   </div>
                 </div>
               ) : (
                 <form onSubmit={handleForgotPassword} className="space-y-4" noValidate>
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground pb-1">
+                  <div className="space-y-1.5">
+                    <p className="pb-1 text-sm text-muted-foreground">
                       Digite seu e-mail e enviaremos um link para redefinir sua senha.
                     </p>
-                    <Label htmlFor="forgot-email">E-mail</Label>
+                    <Label htmlFor="forgot-email" className={fieldLabel}>E-mail</Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Mail className={fieldIcon} aria-hidden="true" />
                       <Input
                         id="forgot-email"
                         type="email"
-                        placeholder="nome@exemplo.com"
+                        placeholder="voce@exemplo.com"
                         autoFocus
-                        className={cn("pl-10", (forgotEmailError || forgotApiError) && "border-red-500 focus-visible:ring-red-500")}
+                        className={cn(fieldInput, (forgotEmailError || forgotApiError) && fieldInputError)}
                         value={forgotEmail}
                         onChange={(e) => {
                           setForgotEmail(e.target.value)
@@ -335,44 +371,50 @@ export default function LoginPage() {
                       />
                     </div>
                     {forgotEmailError && (
-                      <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                        <XCircle className="w-3 h-3" /> {forgotEmailError}
+                      <p className={fieldError}>
+                        <XCircle className="size-3" /> {forgotEmailError}
                       </p>
                     )}
                   </div>
 
                   {forgotApiError && (
-                    <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-3 py-2.5 text-sm text-red-600 dark:text-red-400">
-                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div className={apiErrorBox}>
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
                       <span>{forgotApiError}</span>
                     </div>
                   )}
 
-                  <Button className="w-full h-11 text-base font-semibold" type="submit" disabled={loading}>
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "Enviar link de redefinição"}
+                  <Button className={primaryBtn} type="submit" disabled={loading}>
+                    {loading ? <Loader2 className="size-5 animate-spin" /> : "Enviar link de redefinição"}
                   </Button>
                 </form>
               )}
             </div>
           ) : (
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "signup")} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-8">
-                <TabsTrigger value="login">Entrar</TabsTrigger>
-                <TabsTrigger value="signup">Criar Conta</TabsTrigger>
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "signup")} className="w-full gap-0">
+              <TabsList className="mb-5 grid h-11 w-full grid-cols-2 rounded-xl bg-primary-soft/70 p-1">
+                <TabsTrigger value="login" className={tabTrigger}>
+                  <LogIn aria-hidden="true" />
+                  Entrar
+                </TabsTrigger>
+                <TabsTrigger value="signup" className={tabTrigger}>
+                  <UserPlus aria-hidden="true" />
+                  Criar Conta
+                </TabsTrigger>
               </TabsList>
 
               {/* Login */}
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4" noValidate>
-                  <div className="space-y-1">
-                    <Label htmlFor="login-email">E-mail</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="login-email" className={fieldLabel}>E-mail</Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Mail className={fieldIcon} aria-hidden="true" />
                       <Input
                         id="login-email"
                         type="email"
-                        placeholder="nome@exemplo.com"
-                        className={cn("pl-10", loginErrors.email && "border-red-500 focus-visible:ring-red-500")}
+                        placeholder="voce@exemplo.com"
+                        className={cn(fieldInput, loginErrors.email && fieldInputError)}
                         value={loginEmail}
                         onChange={(e) => {
                           setLoginEmail(e.target.value)
@@ -383,29 +425,30 @@ export default function LoginPage() {
                       />
                     </div>
                     {loginErrors.email && (
-                      <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                        <XCircle className="w-3 h-3" /> {loginErrors.email}
+                      <p className={fieldError}>
+                        <XCircle className="size-3" /> {loginErrors.email}
                       </p>
                     )}
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="login-password">Senha</Label>
+                      <Label htmlFor="login-password" className={fieldLabel}>Senha</Label>
                       <button
                         type="button"
                         onClick={openForgotView}
-                        className="text-xs text-primary hover:underline underline-offset-2"
+                        className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
                       >
                         Esqueceu a senha?
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
+                      <Lock className={fieldIcon} aria-hidden="true" />
                       <Input
                         id="login-password"
                         type={showLoginPassword ? "text" : "password"}
-                        className={cn("pl-10 pr-10", loginErrors.password && "border-red-500 focus-visible:ring-red-500")}
+                        placeholder="Sua senha"
+                        className={cn(fieldInput, "pr-10", loginErrors.password && fieldInputError)}
                         value={loginPassword}
                         onChange={(e) => {
                           setLoginPassword(e.target.value)
@@ -417,29 +460,30 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowLoginPassword(!showLoginPassword)}
-                        className="absolute right-3 top-3 text-muted-foreground hover:text-primary transition-colors"
+                        aria-label={showLoginPassword ? "Ocultar senha" : "Mostrar senha"}
+                        className={trailingBtn}
                       >
-                        {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {showLoginPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                       </button>
                     </div>
                     {loginErrors.password && (
-                      <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                        <XCircle className="w-3 h-3" /> {loginErrors.password}
+                      <p className={fieldError}>
+                        <XCircle className="size-3" /> {loginErrors.password}
                       </p>
                     )}
                   </div>
 
                   {loginApiError && (
-                    <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-3 py-2.5 text-sm text-red-600 dark:text-red-400">
-                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div className={apiErrorBox}>
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
                       <span>{loginApiError}</span>
                     </div>
                   )}
 
                   {emailNotVerifiedFor && (
-                    <div className="rounded-md border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-900 px-3 py-3 space-y-2">
-                      <div className="flex items-start gap-2 text-sm text-yellow-800 dark:text-yellow-300">
-                        <MailCheck className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div className="space-y-2 rounded-[10px] border border-warning/20 bg-warning-soft px-3 py-3">
+                      <div className="flex items-start gap-2 text-sm text-warning-soft-foreground">
+                        <MailCheck className="mt-0.5 size-4 shrink-0" />
                         <span>
                           Verifique seu e-mail antes de entrar. Enviamos um link para{" "}
                           <span className="font-medium">{emailNotVerifiedFor}</span>.
@@ -449,12 +493,12 @@ export default function LoginPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="w-full border-yellow-300 text-yellow-800 hover:bg-yellow-100 dark:border-yellow-700 dark:text-yellow-300 dark:hover:bg-yellow-900/40"
+                        className="w-full rounded-[10px] border-warning/30 bg-card text-warning-soft-foreground hover:bg-warning-soft hover:text-warning-soft-foreground"
                         onClick={handleResendVerification}
                         disabled={verifyResendCooldown > 0 || verifyResendLoading}
                       >
                         {verifyResendLoading ? (
-                          <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Enviando…</>
+                          <><Loader2 className="size-3 mr-2 animate-spin" />Enviando…</>
                         ) : verifyResendCooldown > 0 ? (
                           `Reenviar em ${verifyResendCooldown}s`
                         ) : (
@@ -464,8 +508,15 @@ export default function LoginPage() {
                     </div>
                   )}
 
-                  <Button className="w-full h-11 text-lg font-semibold mt-2" type="submit" disabled={loading}>
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "Entrar Agora"}
+                  <Button className={cn(primaryBtn, "mt-2")} type="submit" disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="size-5 animate-spin" />
+                    ) : (
+                      <>
+                        Entrar Agora
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </>
+                    )}
                   </Button>
                 </form>
               </TabsContent>
@@ -474,19 +525,19 @@ export default function LoginPage() {
               <TabsContent value="signup">
                 {signupSuccess ? (
                   <div className="flex flex-col items-center gap-4 py-6 text-center">
-                    <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-950/40 flex items-center justify-center">
-                      <MailCheck className="w-8 h-8 text-green-600 dark:text-green-400" />
+                    <div className="flex size-16 items-center justify-center rounded-full bg-success-soft">
+                      <MailCheck className="size-8 text-success" aria-hidden="true" />
                     </div>
                     <div className="space-y-1">
-                      <p className="font-semibold text-base">Conta criada com sucesso!</p>
-                      <p className="text-sm text-muted-foreground px-4">
+                      <p className="text-base font-bold">Conta criada com sucesso!</p>
+                      <p className="px-4 text-sm text-muted-foreground">
                         Enviamos um link de confirmação para{" "}
                         <span className="font-medium text-foreground">{signupEmail}</span>.
                         Verifique sua caixa de entrada antes de fazer login.
                       </p>
                     </div>
                     <Button
-                      className="w-full mt-2"
+                      className={cn(primaryBtn, "mt-2")}
                       onClick={() => {
                         setSignupSuccess(false)
                         setActiveTab("login")
@@ -498,15 +549,15 @@ export default function LoginPage() {
                   </div>
                 ) : (
                 <form onSubmit={handleSignUp} className="space-y-4" noValidate>
-                  <div className="space-y-1">
-                    <Label htmlFor="signup-email">E-mail</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signup-email" className={fieldLabel}>E-mail</Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Mail className={fieldIcon} aria-hidden="true" />
                       <Input
                         id="signup-email"
                         type="email"
-                        placeholder="nome@exemplo.com"
-                        className={cn("pl-10", signupErrors.email && "border-red-500 focus-visible:ring-red-500")}
+                        placeholder="voce@exemplo.com"
+                        className={cn(fieldInput, signupErrors.email && fieldInputError)}
                         value={signupEmail}
                         onChange={(e) => {
                           setSignupEmail(e.target.value)
@@ -517,20 +568,21 @@ export default function LoginPage() {
                       />
                     </div>
                     {signupErrors.email && (
-                      <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                        <XCircle className="w-3 h-3" /> {signupErrors.email}
+                      <p className={fieldError}>
+                        <XCircle className="size-3" /> {signupErrors.email}
                       </p>
                     )}
                   </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="signup-password">Senha</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signup-password" className={fieldLabel}>Senha</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
+                      <Lock className={fieldIcon} aria-hidden="true" />
                       <Input
                         id="signup-password"
                         type={showSignupPassword ? "text" : "password"}
-                        className={cn("pl-10 pr-10", signupErrors.password && "border-red-500 focus-visible:ring-red-500")}
+                        placeholder="Mínimo de 8 caracteres"
+                        className={cn(fieldInput, "pr-10", signupErrors.password && fieldInputError)}
                         value={signupPassword}
                         onChange={(e) => {
                           setSignupPassword(e.target.value)
@@ -541,48 +593,48 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowSignupPassword(!showSignupPassword)}
-                        className="absolute right-3 top-3 text-muted-foreground hover:text-primary transition-colors"
+                        aria-label={showSignupPassword ? "Ocultar senha" : "Mostrar senha"}
+                        className={trailingBtn}
                       >
-                        {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {showSignupPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                       </button>
                     </div>
                     {signupErrors.password && (
-                      <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                        <XCircle className="w-3 h-3" /> {signupErrors.password}
+                      <p className={fieldError}>
+                        <XCircle className="size-3" /> {signupErrors.password}
                       </p>
                     )}
                     {passwordStrength && !signupErrors.password && (
-                      <div className="space-y-1 pt-1">
-                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={cn("h-full rounded-full transition-all duration-300", passwordStrength.color)}
-                            style={{ width: passwordStrength.width }}
-                          />
+                      <div className="space-y-2 pt-2">
+                        <div className="flex items-center justify-between">
+                          <EyebrowLabel as="span" className="text-[10px]">Força da senha</EyebrowLabel>
+                          <span className={cn("text-[11px] font-semibold", strengthTextClass[passwordStrength.tone])}>
+                            {passwordStrength.label}
+                          </span>
                         </div>
-                        <p className={cn(
-                          "text-xs",
-                          passwordStrength.label === "Fraca" && "text-red-500",
-                          passwordStrength.label === "Razoável" && "text-orange-400",
-                          passwordStrength.label === "Boa" && "text-yellow-500",
-                          passwordStrength.label === "Forte" && "text-green-500",
-                        )}>
-                          Força da senha: {passwordStrength.label}
-                        </p>
+                        <SegmentedProgress
+                          segments={3}
+                          value={passwordStrength.value}
+                          tone={passwordStrength.tone}
+                          aria-label="Força da senha"
+                        />
                       </div>
                     )}
                   </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="confirmPassword" className={fieldLabel}>Confirmar Senha</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
+                      <History className={fieldIcon} aria-hidden="true" />
                       <Input
                         id="confirmPassword"
                         type={showSignupPassword ? "text" : "password"}
+                        placeholder="Digite novamente a senha"
                         className={cn(
-                          "pl-10 pr-10",
-                          signupErrors.confirmPassword && "border-red-500 focus-visible:ring-red-500",
-                          passwordsMatch && "border-green-500 focus-visible:ring-green-500",
+                          fieldInput,
+                          "pr-10",
+                          signupErrors.confirmPassword && fieldInputError,
+                          passwordsMatch && "border-success focus-visible:border-success focus-visible:ring-success/20",
                         )}
                         value={confirmPassword}
                         onChange={(e) => {
@@ -591,30 +643,37 @@ export default function LoginPage() {
                         }}
                         onBlur={() => setSignupErrors((prev) => ({ ...prev, confirmPassword: validateSignupField("confirmPassword", confirmPassword) }))}
                       />
-                      <div className="absolute right-3 top-3">
+                      <div className="absolute right-3.5 top-1/2 flex -translate-y-1/2">
                         {confirmPassword && (
                           passwordsMatch
-                            ? <CheckCircle2 className="w-4 h-4 text-green-500" />
-                            : <XCircle className="w-4 h-4 text-red-500" />
+                            ? <CheckCircle2 className="size-4 text-success" />
+                            : <XCircle className="size-4 text-destructive" />
                         )}
                       </div>
                     </div>
                     {signupErrors.confirmPassword && (
-                      <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                        <XCircle className="w-3 h-3" /> {signupErrors.confirmPassword}
+                      <p className={fieldError}>
+                        <XCircle className="size-3" /> {signupErrors.confirmPassword}
                       </p>
                     )}
                   </div>
 
                   {signupApiError && (
-                    <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-3 py-2.5 text-sm text-red-600 dark:text-red-400">
-                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div className={apiErrorBox}>
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
                       <span>{signupApiError}</span>
                     </div>
                   )}
 
-                  <Button className="w-full h-11 text-lg font-semibold mt-2 bg-primary/90" type="submit" disabled={loading}>
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "Criar Minha Conta"}
+                  <Button className={cn(primaryBtn, "mt-2")} type="submit" disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="size-5 animate-spin" />
+                    ) : (
+                      <>
+                        Criar Minha Conta
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </>
+                    )}
                   </Button>
                 </form>
                 )}
@@ -623,14 +682,11 @@ export default function LoginPage() {
           )}
         </CardContent>
 
-        <CardFooter className="flex flex-col gap-4 text-center pb-8">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground justify-center">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span>Aprenda gírias de forma inteligente</span>
+        <CardFooter className="px-6 pt-5">
+          <div className="flex w-full items-center gap-2 rounded-[10px] border border-primary/10 bg-primary-soft/60 px-3 py-2.5 text-xs font-medium text-foreground">
+            <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <span>Aprenda gírias e expressões reais de forma inteligente</span>
           </div>
-          <p className="text-xs text-muted-foreground px-8">
-            Ao continuar, você concorda com nossos termos de serviço e política de privacidade.
-          </p>
         </CardFooter>
       </Card>
     </div>

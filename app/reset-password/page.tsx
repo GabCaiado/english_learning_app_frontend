@@ -7,21 +7,40 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { BookMarked, Loader2, Lock, Sparkles, Eye, EyeOff, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
+import { BookOpen, Loader2, Lock, Sparkles, Eye, EyeOff, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { EyebrowLabel, SegmentedProgress } from "@/components/shared"
 
-function getPasswordStrength(password: string): { label: string; color: string; width: string } | null {
+type StrengthTone = "destructive" | "warning" | "success"
+
+function getPasswordStrength(password: string): { label: string; value: number; tone: StrengthTone } | null {
   if (!password) return null
   const hasUpper = /[A-Z]/.test(password)
   const hasNumber = /[0-9]/.test(password)
   const hasSpecial = /[^A-Za-z0-9]/.test(password)
   const isLong = password.length >= 8
   const score = [isLong, hasUpper, hasNumber, hasSpecial].filter(Boolean).length
-  if (score <= 1) return { label: "Fraca", color: "bg-red-500", width: "25%" }
-  if (score === 2) return { label: "Razoável", color: "bg-orange-400", width: "50%" }
-  if (score === 3) return { label: "Boa", color: "bg-yellow-500", width: "75%" }
-  return { label: "Forte", color: "bg-green-500", width: "100%" }
+  if (score <= 1) return { label: "Fraca", value: 1, tone: "destructive" }
+  if (score === 2) return { label: "Razoável", value: 2, tone: "warning" }
+  if (score === 3) return { label: "Boa", value: 3, tone: "warning" }
+  return { label: "Forte", value: 3, tone: "success" }
 }
+
+const strengthTextClass: Record<StrengthTone, string> = {
+  destructive: "text-destructive",
+  warning: "text-warning",
+  success: "text-success",
+}
+
+const fieldLabel = "text-xs font-semibold text-foreground"
+const fieldIcon = "pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground"
+const fieldInput = "h-11 rounded-[10px] bg-card pl-10 text-sm shadow-none placeholder:text-muted-foreground/70 dark:bg-card"
+const fieldInputError = "border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20"
+const trailingBtn = "absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-primary"
+const fieldError = "mt-1.5 flex items-center gap-1 text-xs text-destructive"
+const primaryBtn = "h-11 w-full rounded-[10px] text-sm font-semibold shadow-md shadow-primary/25"
+const apiErrorBox =
+  "flex items-start gap-2 rounded-[10px] border border-destructive/20 bg-destructive-soft px-3 py-2.5 text-sm text-destructive-soft-foreground"
 
 function ResetPasswordForm() {
   const router = useRouter()
@@ -77,16 +96,16 @@ function ResetPasswordForm() {
   if (!token) {
     return (
       <div className="flex flex-col items-center gap-4 py-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
-          <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+        <div className="flex size-16 items-center justify-center rounded-full bg-destructive-soft">
+          <AlertCircle className="size-8 text-destructive" aria-hidden="true" />
         </div>
         <div className="space-y-1">
-          <p className="font-semibold text-base">Link inválido</p>
-          <p className="text-sm text-muted-foreground px-4">
+          <p className="text-base font-bold">Link inválido</p>
+          <p className="px-4 text-sm text-muted-foreground">
             Este link de redefinição é inválido ou expirou. Solicite um novo link.
           </p>
         </div>
-        <Button variant="outline" className="w-full mt-2" onClick={() => router.push("/login")}>
+        <Button variant="outline" className="mt-2 h-11 w-full rounded-[10px]" onClick={() => router.push("/login")}>
           Voltar para o login
         </Button>
       </div>
@@ -96,16 +115,16 @@ function ResetPasswordForm() {
   if (success) {
     return (
       <div className="flex flex-col items-center gap-4 py-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-950/40 flex items-center justify-center">
-          <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
+        <div className="flex size-16 items-center justify-center rounded-full bg-success-soft">
+          <CheckCircle2 className="size-8 text-success" aria-hidden="true" />
         </div>
         <div className="space-y-1">
-          <p className="font-semibold text-base">Senha redefinida!</p>
-          <p className="text-sm text-muted-foreground px-4">
+          <p className="text-base font-bold">Senha redefinida!</p>
+          <p className="px-4 text-sm text-muted-foreground">
             Sua senha foi atualizada com sucesso. Redirecionando para o login…
           </p>
         </div>
-        <Button className="w-full mt-2" onClick={() => router.push("/login")}>
+        <Button className={cn(primaryBtn, "mt-2")} onClick={() => router.push("/login")}>
           Ir para o login
         </Button>
       </div>
@@ -114,15 +133,15 @@ function ResetPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-      <div className="space-y-1">
-        <Label htmlFor="new-password">Nova senha</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="new-password" className={fieldLabel}>Nova senha</Label>
         <div className="relative">
-          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
+          <Lock className={fieldIcon} aria-hidden="true" />
           <Input
             id="new-password"
             type={showPassword ? "text" : "password"}
             autoFocus
-            className={cn("pl-10 pr-10", passwordError && "border-red-500 focus-visible:ring-red-500")}
+            className={cn(fieldInput, "pr-10", passwordError && fieldInputError)}
             value={password}
             onChange={(e) => {
               setPassword(e.target.value)
@@ -134,48 +153,47 @@ function ResetPasswordForm() {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-3 text-muted-foreground hover:text-primary transition-colors"
+            className={trailingBtn}
+            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
           >
-            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>
         </div>
         {passwordError && (
-          <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-            <XCircle className="w-3 h-3" /> {passwordError}
+          <p className={fieldError}>
+            <XCircle className="size-3" /> {passwordError}
           </p>
         )}
         {passwordStrength && !passwordError && (
-          <div className="space-y-1 pt-1">
-            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-              <div
-                className={cn("h-full rounded-full transition-all duration-300", passwordStrength.color)}
-                style={{ width: passwordStrength.width }}
-              />
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between">
+              <EyebrowLabel as="span" className="text-[10px]">Força da senha</EyebrowLabel>
+              <span className={cn("text-[11px] font-semibold", strengthTextClass[passwordStrength.tone])}>
+                {passwordStrength.label}
+              </span>
             </div>
-            <p className={cn(
-              "text-xs",
-              passwordStrength.label === "Fraca" && "text-red-500",
-              passwordStrength.label === "Razoável" && "text-orange-400",
-              passwordStrength.label === "Boa" && "text-yellow-500",
-              passwordStrength.label === "Forte" && "text-green-500",
-            )}>
-              Força da senha: {passwordStrength.label}
-            </p>
+            <SegmentedProgress
+              segments={3}
+              value={passwordStrength.value}
+              tone={passwordStrength.tone}
+              aria-label="Força da senha"
+            />
           </div>
         )}
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="confirm-password">Confirmar nova senha</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="confirm-password" className={fieldLabel}>Confirmar nova senha</Label>
         <div className="relative">
-          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10" />
+          <Lock className={fieldIcon} aria-hidden="true" />
           <Input
             id="confirm-password"
             type={showPassword ? "text" : "password"}
             className={cn(
-              "pl-10 pr-10",
-              confirmError && "border-red-500 focus-visible:ring-red-500",
-              passwordsMatch && "border-green-500 focus-visible:ring-green-500",
+              fieldInput,
+              "pr-10",
+              confirmError && fieldInputError,
+              passwordsMatch && "border-success focus-visible:border-success focus-visible:ring-success/20",
             )}
             value={confirmPassword}
             onChange={(e) => {
@@ -184,30 +202,30 @@ function ResetPasswordForm() {
             }}
             onBlur={() => setConfirmError(validateConfirm(confirmPassword))}
           />
-          <div className="absolute right-3 top-3">
+          <div className="absolute right-3.5 top-1/2 flex -translate-y-1/2">
             {confirmPassword && (
               passwordsMatch
-                ? <CheckCircle2 className="w-4 h-4 text-green-500" />
-                : <XCircle className="w-4 h-4 text-red-500" />
+                ? <CheckCircle2 className="size-4 text-success" />
+                : <XCircle className="size-4 text-destructive" />
             )}
           </div>
         </div>
         {confirmError && (
-          <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-            <XCircle className="w-3 h-3" /> {confirmError}
+          <p className={fieldError}>
+            <XCircle className="size-3" /> {confirmError}
           </p>
         )}
       </div>
 
       {apiError && (
-        <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-3 py-2.5 text-sm text-red-600 dark:text-red-400">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+        <div className={apiErrorBox}>
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <span>{apiError}</span>
         </div>
       )}
 
-      <Button className="w-full h-11 text-base font-semibold mt-2" type="submit" disabled={loading}>
-        {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "Redefinir senha"}
+      <Button className={cn(primaryBtn, "mt-2")} type="submit" disabled={loading}>
+        {loading ? <Loader2 className="size-5 animate-spin" /> : "Redefinir senha"}
       </Button>
     </form>
   )
@@ -215,32 +233,30 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden -z-10">
-        <div className="absolute top-[10%] left-[10%] w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-[10%] right-[10%] w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+    <div className="relative isolate flex h-screen items-center justify-center overflow-y-auto bg-background bg-gradient-to-br from-primary-soft/60 via-background to-primary-soft/40 p-4">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div className="absolute -left-24 -top-24 size-96 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-24 size-[28rem] rounded-full bg-banner-to/10 blur-3xl" />
       </div>
 
-      <Card className="w-full max-w-md border-2 shadow-2xl backdrop-blur-sm bg-background/80">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 transform hover:scale-105 transition-transform">
-            <BookMarked className="w-10 h-10 text-primary-foreground" />
+      <Card className="w-full max-w-[390px] gap-0 rounded-panel border-border/70 bg-card py-6 shadow-card">
+        <CardHeader className="gap-0 px-6 pb-5 text-center">
+          <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-xl bg-gradient-banner shadow-lg shadow-primary/30">
+            <BookOpen className="size-5 text-primary-foreground" aria-hidden="true" />
           </div>
-          <div className="space-y-1">
-            <CardTitle className="text-3xl font-bold tracking-tight">Nova senha</CardTitle>
-            <CardDescription className="text-base">Escolha uma senha segura para sua conta</CardDescription>
-          </div>
+          <CardTitle className="text-2xl font-extrabold tracking-tight">Nova senha</CardTitle>
+          <CardDescription className="mt-1.5 text-[13px]">Escolha uma senha segura para sua conta</CardDescription>
         </CardHeader>
 
-        <CardContent>
-          <Suspense fallback={<div className="h-40 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}>
+        <CardContent className="px-6">
+          <Suspense fallback={<div className="flex h-40 items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>}>
             <ResetPasswordForm />
           </Suspense>
         </CardContent>
 
-        <CardFooter className="flex flex-col gap-4 text-center pb-8">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground justify-center">
-            <Sparkles className="w-4 h-4 text-primary" />
+        <CardFooter className="px-6 pt-5">
+          <div className="flex w-full items-center gap-2 rounded-[10px] border border-primary/10 bg-primary-soft/60 px-3 py-2.5 text-xs font-medium text-foreground">
+            <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
             <span>Aprenda gírias de forma inteligente</span>
           </div>
         </CardFooter>

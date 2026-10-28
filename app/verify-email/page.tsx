@@ -5,7 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { authFetch } from "@/lib/auth"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { BookMarked, Loader2, CheckCircle2, XCircle } from "lucide-react"
+import { BookOpen, Loader2, CheckCircle2, XCircle } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+const primaryBtn = "h-11 w-full rounded-[10px] text-sm font-semibold shadow-md shadow-primary/25"
 
 function VerifyEmailContent() {
   const router = useRouter()
@@ -45,21 +48,21 @@ function VerifyEmailContent() {
     <div className="flex flex-col items-center gap-4 py-6 text-center">
       {status === "loading" && (
         <>
-          <Loader2 className="w-12 h-12 animate-spin text-primary" />
-          <p className="text-muted-foreground">Verificando seu e-mail…</p>
+          <Loader2 className="size-12 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Verificando seu e-mail…</p>
         </>
       )}
 
       {status === "success" && (
         <>
-          <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-950/40 flex items-center justify-center">
-            <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
+          <div className="flex size-16 items-center justify-center rounded-full bg-success-soft">
+            <CheckCircle2 className="size-8 text-success" aria-hidden="true" />
           </div>
           <div className="space-y-1">
-            <p className="font-semibold text-base">E-mail verificado!</p>
-            <p className="text-sm text-muted-foreground">Sua conta está ativa. Redirecionando para o login…</p>
+            <p className="text-base font-bold">E-mail verificado!</p>
+            <p className="px-4 text-sm text-muted-foreground">Sua conta está ativa. Redirecionando para o login…</p>
           </div>
-          <Button className="w-full mt-2" onClick={() => router.push("/login")}>
+          <Button className={cn(primaryBtn, "mt-2")} onClick={() => router.push("/login")}>
             Ir para o login
           </Button>
         </>
@@ -67,14 +70,14 @@ function VerifyEmailContent() {
 
       {status === "error" && (
         <>
-          <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
-            <XCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+          <div className="flex size-16 items-center justify-center rounded-full bg-destructive-soft">
+            <XCircle className="size-8 text-destructive" aria-hidden="true" />
           </div>
           <div className="space-y-1">
-            <p className="font-semibold text-base">Verificação falhou</p>
-            <p className="text-sm text-muted-foreground px-4">{message}</p>
+            <p className="text-base font-bold">Verificação falhou</p>
+            <p className="px-4 text-sm text-muted-foreground">{message}</p>
           </div>
-          <Button variant="outline" className="w-full mt-2" onClick={() => router.push("/login")}>
+          <Button variant="outline" className="mt-2 h-11 w-full rounded-[10px]" onClick={() => router.push("/login")}>
             Voltar para o login
           </Button>
         </>
@@ -85,19 +88,22 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-2 shadow-2xl backdrop-blur-sm bg-background/80">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-            <BookMarked className="w-10 h-10 text-primary-foreground" />
+    <div className="relative isolate flex h-screen items-center justify-center overflow-y-auto bg-background bg-gradient-to-br from-primary-soft/60 via-background to-primary-soft/40 p-4">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div className="absolute -left-24 -top-24 size-96 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-24 size-[28rem] rounded-full bg-banner-to/10 blur-3xl" />
+      </div>
+
+      <Card className="w-full max-w-[390px] gap-0 rounded-panel border-border/70 bg-card py-6 shadow-card">
+        <CardHeader className="gap-0 px-6 pb-5 text-center">
+          <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-xl bg-gradient-banner shadow-lg shadow-primary/30">
+            <BookOpen className="size-5 text-primary-foreground" aria-hidden="true" />
           </div>
-          <div className="space-y-1">
-            <CardTitle className="text-2xl font-bold">Confirmação de e-mail</CardTitle>
-            <CardDescription>English Slang App</CardDescription>
-          </div>
+          <CardTitle className="text-2xl font-extrabold tracking-tight">Confirmação de e-mail</CardTitle>
+          <CardDescription className="mt-1.5 text-[13px]">English Slang App</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}>
+        <CardContent className="px-6">
+          <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>}>
             <VerifyEmailContent />
           </Suspense>
         </CardContent>
