@@ -4,6 +4,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  devIndicators: {
+    position: 'bottom-right',
+  },
   images: {
     unoptimized: true,
   },
