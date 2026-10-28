@@ -1,23 +1,27 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   Bot,
+  BrainCircuit,
   Check,
   CheckCircle2,
   ClipboardList,
-  Clock,
   Copy,
-  Flame,
+  Cpu,
+  Flag,
+  Hash,
   Info,
+  Layers,
   Loader2,
-  MessageCircle,
   RefreshCw,
-  ShieldCheck,
+  Rocket,
+  Share2,
+  SkipForward,
+  SlidersHorizontal,
   Trash2,
-  Trophy,
   User,
   X,
   Zap,
@@ -25,6 +29,7 @@ import {
   Search,
   Sparkles,
   ListChecks,
+  type LucideIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -42,15 +47,15 @@ import {
   type GenerateBatchParams,
   type VocabularyInfo,
 } from "@/lib/api"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PaginationControls } from "@/components/pagination-controls"
+import { EyebrowLabel, KbdHint, Pill, TonalIcon, useConfirm } from "@/components/shared"
+import { cn } from "@/lib/utils"
+import { PageContainer } from "@/components/layout/page-container"
 
 
 type FeedbackRow = {
@@ -139,7 +144,7 @@ function DiffHighlight({ original, revised }: { original: string; revised: strin
         return (
           <span
             key={idx}
-            className={isNew ? "bg-green-500/15 text-green-700 font-semibold px-0.5 rounded border border-green-300/30 animate-pulse" : ""}
+            className={isNew ? "rounded bg-destructive-soft px-0.5 text-destructive line-through decoration-destructive/70" : ""}
           >
             {word}
           </span>
@@ -151,20 +156,20 @@ function DiffHighlight({ original, revised }: { original: string; revised: strin
 
 
 const CATEGORY_OPTIONS = [
-  { value: "gen_z", label: "Gen Z / TikTok" },
-  { value: "internet", label: "Internet" },
-  { value: "dating", label: "Dating" },
-  { value: "sports", label: "Sports" },
-  { value: "work", label: "Work / Hustle" },
-  { value: "general", label: "General casual" },
+  { value: "gen_z", label: "TikTok & Gen Z" },
+  { value: "internet", label: "Internet & Memes" },
+  { value: "dating", label: "Relacionamentos" },
+  { value: "sports", label: "Esportes" },
+  { value: "work", label: "Trabalho & Tech" },
+  { value: "general", label: "Conversa Diária" },
 ]
 
 const CONTEXT_OPTIONS = [
-  { value: "text_message", label: "Text messages" },
-  { value: "social_media", label: "Social media" },
-  { value: "group_chat", label: "Group chat" },
-  { value: "casual_speech", label: "Casual speech" },
-  { value: "reaction", label: "Reaction / reply" },
+  { value: "text_message", label: "Mensagens de texto (DM / WhatsApp)" },
+  { value: "social_media", label: "Redes sociais" },
+  { value: "group_chat", label: "Chat em grupo" },
+  { value: "casual_speech", label: "Fala casual" },
+  { value: "reaction", label: "Reação / resposta" },
 ]
 
 const COUNT_OPTIONS = [10, 25, 50, 100]
@@ -195,13 +200,13 @@ function makeDraft(row: FeedbackRow): Draft {
   }
 }
 
-function getConfidenceBadge(row: FeedbackRow) {
+function getConfidenceBadge(row: FeedbackRow): { label: string; variant: "warning" | "destructive" } | null {
   const conf = row.model_metadata?.agreement_confidence
   if (conf === undefined || conf === null) return null
   const pct = Math.round(conf * 100)
-  if (pct >= 70) return { label: `${pct}% confident`, className: "bg-yellow-500/15 text-yellow-700 border-yellow-400" }
-  if (pct >= 50) return { label: `${pct}% uncertain`, className: "bg-orange-500/15 text-orange-700 border-orange-400" }
-  return { label: `${pct}% very uncertain`, className: "bg-red-500/15 text-red-700 border-red-400" }
+  if (pct >= 70) return { label: `${pct}% (Confiante)`, variant: "warning" }
+  if (pct >= 50) return { label: `${pct}% (Incerto)`, variant: "warning" }
+  return { label: `${pct}% (Muito incerto)`, variant: "destructive" }
 }
 
 function getProgressToNextMilestone(stats: DatasetStats) {
@@ -215,6 +220,38 @@ function getProgressToNextMilestone(stats: DatasetStats) {
 }
 
 // Dataset Health Section
+function HealthMiniCard({
+  eyebrow,
+  icon,
+  children,
+  note,
+}: {
+  eyebrow: string
+  icon: LucideIcon
+  children: ReactNode
+  note?: ReactNode
+}) {
+  return (
+    <div className="flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <EyebrowLabel className="leading-snug">{eyebrow}</EyebrowLabel>
+        <TonalIcon icon={icon} tone="primary" size="sm" />
+      </div>
+      <div className="flex-1 space-y-1">{children}</div>
+      {note ? (
+        <Pill
+          variant="warning"
+          size="sm"
+          icon={AlertTriangle}
+          className="h-auto whitespace-normal py-1 leading-snug"
+        >
+          {note}
+        </Pill>
+      ) : null}
+    </div>
+  )
+}
+
 function DatasetHealthSection({
   stats,
   loading,
@@ -226,102 +263,184 @@ function DatasetHealthSection({
 }) {
   if (loading) {
     return (
-      <Card>
-        <CardContent className="py-8 flex items-center justify-center gap-3 text-muted-foreground">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          Loading dataset stats…
-        </CardContent>
-      </Card>
+      <section className="rounded-panel border border-border bg-card p-6 shadow-card">
+        <div className="flex items-center justify-center gap-3 py-8 text-sm text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          Carregando estatísticas do dataset…
+        </div>
+      </section>
     )
   }
 
   if (!stats) return null
 
-  const { pct, next } = getProgressToNextMilestone(stats)
+  const { next } = getProgressToNextMilestone(stats)
   const slangPct = stats.total_approved > 0
     ? Math.round((stats.slang_count / stats.total_approved) * 100)
     : 0
+  const neutralPct = stats.total_approved > 0 ? 100 - slangPct : 0
+  const aiCount = AI_SOURCES.reduce((sum, s) => sum + (stats.by_source[s] ?? 0), 0)
+  const userCount = USER_SOURCES.reduce((sum, s) => sum + (stats.by_source[s] ?? 0), 0)
+  const sourceTotal = aiCount + userCount
+  const aiPct = sourceTotal > 0 ? Math.round((aiCount / sourceTotal) * 1000) / 10 : 0
+  const userPct = sourceTotal > 0 ? Math.round((100 - aiPct) * 10) / 10 : 0
+  const target = stats.milestones.length
+    ? stats.milestones[stats.milestones.length - 1].count
+    : stats.total_approved
+  const overallPct = target > 0 ? Math.min(100, (stats.total_approved / target) * 100) : 100
 
   return (
-    <Card className="border-primary/20 bg-primary/[0.02]">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold">Dataset Health</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onRefresh}>
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
-
-        {/* Progress toward next milestone */}
-        <div className="space-y-2">
-          <div className="flex items-end justify-between">
-            <span className="text-3xl font-bold">{stats.total_approved.toLocaleString()}</span>
-            <span className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-              {next
-                ? `→ ${next.emoji} ${next.label} at ${next.count.toLocaleString()}`
-                : <><Trophy className="w-4 h-4 text-yellow-500" /> All milestones reached!</>}
-            </span>
+    <section className="space-y-6 rounded-panel border border-border bg-card p-6 shadow-card">
+      {/* Title row */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-bold text-foreground">Saúde Geral do Dataset</h3>
+            {stats.balance_ok && (
+              <Pill variant="success" size="sm" className="uppercase tracking-[0.06em]">
+                Alta integridade
+              </Pill>
+            )}
           </div>
-          <Progress value={pct} className="h-3" />
-          <div className="flex gap-2 flex-wrap">
-            {stats.milestones.map((m) => (
-              <span
-                key={m.count}
-                className={`text-xs px-2 py-0.5 rounded-full border ${m.reached
-                  ? "bg-green-500/15 text-green-700 border-green-400"
-                  : "bg-muted text-muted-foreground border-border"
-                  }`}
-              >
-                {m.emoji} {m.label} ({m.count.toLocaleString()})
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-lg border bg-background p-3 space-y-1">
-            <p className="text-xs text-muted-foreground font-medium">Balance</p>
-            <p className="text-sm font-semibold">{slangPct}% slang</p>
-            <p className={`text-xs flex items-center gap-1 ${stats.balance_ok ? "text-green-600" : "text-red-500"}`}>
-              {stats.balance_ok
-                ? <><CheckCircle2 className="w-3 h-3" /> Good mix</>
-                : <><AlertTriangle className="w-3 h-3" /> Unbalanced</>}
-            </p>
-          </div>
-
-          <div className="rounded-lg border bg-background p-3 space-y-1">
-            <p className="text-xs text-muted-foreground font-medium">Breakdown</p>
-            <p className="text-xs flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500" /> Slang: <span className="font-semibold">{stats.slang_count.toLocaleString()}</span></p>
-            <p className="text-xs flex items-center gap-1"><MessageCircle className="w-3 h-3 text-blue-500" /> Neutral: <span className="font-semibold">{stats.neutral_count.toLocaleString()}</span></p>
-          </div>
-
-          <div className="rounded-lg border bg-background p-3 space-y-1">
-            <p className="text-xs text-muted-foreground font-medium">Sources</p>
-            <p className="text-xs"><Bot className="inline w-3 h-3 mr-1" />AI: <span className="font-semibold">{AI_SOURCES.reduce((sum, s) => sum + (stats.by_source[s] ?? 0), 0).toLocaleString()}</span></p>
-            <p className="text-xs"><User className="inline w-3 h-3 mr-1" />Users: <span className="font-semibold">{USER_SOURCES.reduce((sum, s) => sum + (stats.by_source[s] ?? 0), 0).toLocaleString()}</span></p>
-          </div>
-
-          <div className="rounded-lg border bg-background p-3 space-y-1">
-            <p className="text-xs text-muted-foreground font-medium">Model readiness</p>
-            <p className={`text-xs flex items-center gap-1 ${stats.distilbert_ready ? "text-green-600" : "text-muted-foreground"}`}>
-              {stats.distilbert_ready ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />} DistilBERT (500+)
-            </p>
-            <p className={`text-xs flex items-center gap-1 ${stats.byt5_ready ? "text-green-600" : "text-muted-foreground"}`}>
-              {stats.byt5_ready ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />} ByT5 (2,000+)
-            </p>
-          </div>
-        </div>
-
-        {stats.pending_review > 0 && (
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <ClipboardList className="w-3 h-3" /> <span className="font-semibold">{stats.pending_review}</span> items waiting for your review below
+          <p className="text-sm text-muted-foreground">
+            Acompanhe o volume acumulado para disparo automático das rodadas de pesos de fine-tune.
           </p>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onRefresh}
+          aria-label="Atualizar estatísticas"
+          className="shrink-0 text-muted-foreground hover:text-primary"
+        >
+          <RefreshCw className="size-4" />
+        </Button>
+      </div>
+
+      {/* Overall progress */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <p className="flex items-baseline gap-2">
+            <span className="text-[40px] font-extrabold leading-none tracking-tight text-foreground">
+              {stats.total_approved.toLocaleString()}
+            </span>
+            <span className="text-base font-semibold text-muted-foreground">
+              / {target.toLocaleString()} frases
+            </span>
+          </p>
+          <Pill variant="primary">{overallPct.toFixed(1)}% Completo</Pill>
+        </div>
+        <div
+          role="progressbar"
+          aria-label="Progresso do dataset"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(overallPct)}
+          className="h-3 w-full overflow-hidden rounded-full bg-primary-soft"
+        >
+          <div
+            className="h-full rounded-full bg-linear-to-r from-primary to-success transition-[width]"
+            style={{ width: `${overallPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Milestones */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {stats.milestones.map((m) => (
+          <div
+            key={m.count}
+            className={cn(
+              "flex items-start gap-2 rounded-xl border px-3 py-2.5",
+              m.reached ? "border-success/30 bg-success-soft" : "border-primary/20 bg-primary-soft",
+            )}
+          >
+            {m.reached ? (
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+            ) : (
+              <Flag className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+            )}
+            <div className="min-w-0">
+              <p
+                className={cn(
+                  "text-xs font-semibold",
+                  m.reached ? "text-success-soft-foreground" : "text-primary-soft-foreground",
+                )}
+              >
+                {m.label} ({m.count.toLocaleString()})
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {m.reached
+                  ? "Atingido"
+                  : next && next.count === m.count
+                    ? `Próximo · faltam ${(m.count - stats.total_approved).toLocaleString()} frases`
+                    : `Faltam ${(m.count - stats.total_approved).toLocaleString()} frases`}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Mini-cards */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <HealthMiniCard
+          eyebrow="Balanço de Classes"
+          icon={SlidersHorizontal}
+          note={!stats.balance_ok ? "Desbalanceado — gere mais exemplos da classe menor" : undefined}
+        >
+          <p className="text-lg font-extrabold text-foreground">
+            {slangPct}% Slang{" "}
+            <span className="text-xs font-medium text-muted-foreground">/ {neutralPct}% Neutro</span>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {stats.slang_count.toLocaleString()} gírias · {stats.neutral_count.toLocaleString()} neutras
+          </p>
+          {stats.balance_ok && (
+            <p className="flex items-center gap-1 text-xs font-semibold text-success">
+              <CheckCircle2 className="size-3" aria-hidden="true" /> Mix equilibrado
+            </p>
+          )}
+        </HealthMiniCard>
+
+        <HealthMiniCard eyebrow="Proporção de Fontes" icon={Share2}>
+          <p className="text-lg font-extrabold text-foreground">
+            {aiPct}% IA{" "}
+            <span className="text-xs font-medium text-muted-foreground">/ {userPct}%</span>
+          </p>
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Bot className="size-3" aria-hidden="true" /> {aiCount.toLocaleString()} Sintéticas
+          </p>
+          <p className="flex items-center gap-1 text-xs font-semibold text-primary">
+            <User className="size-3" aria-hidden="true" /> {userCount.toLocaleString()} Relatórios Reais
+          </p>
+        </HealthMiniCard>
+
+        <HealthMiniCard eyebrow="Prontidão dos Modelos" icon={Cpu}>
+          <p className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-foreground">DistilBERT (500+)</span>
+            <span className={cn("font-semibold", stats.distilbert_ready ? "text-success" : "text-muted-foreground")}>
+              {stats.distilbert_ready ? "Pronto" : "Pendente"}
+            </span>
+          </p>
+          <p className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-foreground">ByT5 (2,000+)</span>
+            <span className={cn("font-semibold", stats.byt5_ready ? "text-success" : "text-muted-foreground")}>
+              {stats.byt5_ready ? "Pronto" : "Pendente"}
+            </span>
+          </p>
+        </HealthMiniCard>
+
+        <HealthMiniCard
+          eyebrow="Fila de Curadoria"
+          icon={ClipboardList}
+          note={stats.pending_review > 0 ? "Aguardando sua revisão abaixo" : undefined}
+        >
+          <p className="text-lg font-extrabold text-foreground">
+            {stats.pending_review.toLocaleString()} Pendentes
+          </p>
+        </HealthMiniCard>
+      </div>
+    </section>
   )
 }
 
@@ -337,6 +456,7 @@ function GenerateBatchSection({ onGenerated }: { onGenerated: () => void }) {
   })
   const [generating, setGenerating] = useState(false)
   const [targetWord, setTargetWord] = useState("")
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const toggleCategory = (value: string) => {
     setParams((prev) => ({
@@ -349,9 +469,16 @@ function GenerateBatchSection({ onGenerated }: { onGenerated: () => void }) {
 
   const handleGenerate = async () => {
     if (params.categories.length === 0) {
-      toast.error("Select at least one category")
+      toast.error("Selecione ao menos uma categoria")
       return
     }
+    const slangPct = Math.round(params.slang_mix * 100)
+    const confirmed = await confirm({
+      title: `Gerar lote de ${params.count} sentenças?`,
+      description: `A IA vai gerar ${params.count} sentenças sintéticas (${slangPct}% gírias, ${100 - slangPct}% neutras) em ${params.categories.length} categoria(s)${targetWord.trim() ? `, focadas no termo "${targetWord.trim()}"` : ""}. O modelo BERT local pontua a confiança e os itens incertos entram na fila de curadoria. Isso consome créditos da OpenAI.`,
+      confirmLabel: "Gerar lote",
+    })
+    if (!confirmed) return
     setGenerating(true)
     try {
       const result = await generateDatasetBatch({
@@ -360,7 +487,7 @@ function GenerateBatchSection({ onGenerated }: { onGenerated: () => void }) {
       })
       toast.success(result.message)
       if (result.avoided_words.length > 0) {
-        toast.info(`Avoided: ${result.avoided_words.join(", ")}`)
+        toast.info(`Termos evitados: ${result.avoided_words.join(", ")}`)
       }
       setTargetWord("")
       onGenerated()
@@ -376,159 +503,191 @@ function GenerateBatchSection({ onGenerated }: { onGenerated: () => void }) {
   const neutralCount = params.count - slangCount
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" />
-          <CardTitle className="text-base font-semibold">Generate Batch</CardTitle>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          OpenAI generates sentences → local model scores them → only uncertain ones need your review.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-
-        {/* Count selector */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">How many sentences?</label>
-          <div className="flex gap-2">
-            {COUNT_OPTIONS.map((n) => (
-              <Button
-                key={n}
-                variant={params.count === n ? "default" : "outline"}
-                size="sm"
-                onClick={() => setParams((p) => ({ ...p, count: n }))}
-              >
-                {n}
-              </Button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            ~{slangCount} slang + ~{neutralCount} neutral sentences
+    <section className="space-y-5 rounded-panel border border-border bg-card p-6 shadow-card">
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <TonalIcon icon={Zap} tone="primary" size="md" />
+        <div className="min-w-0 space-y-1">
+          <h3 className="text-base font-bold text-foreground">Gerador Sintético de Lotes (AI Batch)</h3>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            OpenAI sintetiza cenários e expressões → Modelo BERT local pontua confiança → Itens incertos entram na fila de curadoria.
           </p>
         </div>
+      </div>
 
-        {/* Category pills */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Categories</label>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORY_OPTIONS.map((cat) => (
+      {/* Count selector */}
+      <div className="space-y-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <label className="text-sm font-semibold text-foreground">Quantidade de sentenças</label>
+          <span className="text-xs font-medium text-primary">
+            ~{slangCount} gírias + ~{neutralCount} frases neutras
+          </span>
+        </div>
+        <div role="group" aria-label="Quantidade de sentenças" className="grid grid-cols-4 gap-2">
+          {COUNT_OPTIONS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              aria-pressed={params.count === n}
+              onClick={() => setParams((p) => ({ ...p, count: n }))}
+              className={cn(
+                "h-10 rounded-xl border text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                params.count === n
+                  ? "border-primary bg-primary text-primary-foreground shadow-card"
+                  : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-primary-soft/40"
+              )}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Category chips */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold text-foreground">Categorias temáticas</label>
+        <div className="flex flex-wrap gap-2">
+          {CATEGORY_OPTIONS.map((cat) => {
+            const selected = params.categories.includes(cat.value)
+            return (
               <button
                 key={cat.value}
                 type="button"
+                aria-pressed={selected}
                 onClick={() => toggleCategory(cat.value)}
-                className={`text-xs px-3 py-1 rounded-full border transition-colors ${params.categories.includes(cat.value)
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:border-primary/50"
-                  }`}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1 rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selected
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-primary-soft text-primary-soft-foreground hover:bg-primary-soft/70"
+                )}
               >
                 {cat.label}
+                {selected && <Check className="size-3.5" aria-hidden="true" />}
               </button>
-            ))}
-          </div>
+            )
+          })}
         </div>
+      </div>
 
-        {/* Context + slang mix */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Context style</label>
-            <select
-              value={params.context_style}
-              onChange={(e) => setParams((p) => ({ ...p, context_style: e.target.value }))}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {CONTEXT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Slang mix:{" "}
-              <span className="text-primary font-bold">{Math.round(params.slang_mix * 100)}%</span>
-            </label>
-            <input
-              type="range"
-              min={0.2}
-              max={0.9}
-              step={0.1}
-              value={params.slang_mix}
-              onChange={(e) => setParams((p) => ({ ...p, slang_mix: parseFloat(e.target.value) }))}
-              className="w-full accent-primary"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{Math.round((1 - params.slang_mix) * 100)}% neutral</span>
-              <span>{Math.round(params.slang_mix * 100)}% slang</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Target word */}
+      {/* Context + slang mix */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Target word</label>
+          <label htmlFor="context-style" className="text-sm font-semibold text-foreground">Estilo de contexto</label>
+          <select
+            id="context-style"
+            value={params.context_style}
+            onChange={(e) => setParams((p) => ({ ...p, context_style: e.target.value }))}
+            className="h-10 w-full rounded-xl border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            {CONTEXT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <label htmlFor="slang-mix" className="text-sm font-semibold text-primary">
+              Mix: {Math.round(params.slang_mix * 100)}% Slang
+            </label>
+            <span className="text-xs font-medium text-muted-foreground">
+              {Math.round((1 - params.slang_mix) * 100)}% Neutro
+            </span>
+          </div>
+          <input
+            id="slang-mix"
+            type="range"
+            min={0.2}
+            max={0.9}
+            step={0.1}
+            value={params.slang_mix}
+            onChange={(e) => setParams((p) => ({ ...p, slang_mix: parseFloat(e.target.value) }))}
+            className="w-full accent-primary"
+          />
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span>Mais balanceado</span>
+            <span>Mais focado em gírias</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Target word */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="target-word" className="text-sm font-semibold text-foreground">
+              Foco em termo específico (opcional)
+            </label>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                  <Info className="size-3.5 cursor-help text-muted-foreground" />
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
-                  Force every sentence to include this word. Use it to fix model failures on ambiguous words (e.g. &quot;fire&quot;, &quot;sick&quot;). Generates a mix of slang and literal usages so the model learns from context.
+                  Força todas as sentenças a incluírem esta palavra. Use para corrigir falhas do modelo em palavras ambíguas (ex.: &quot;fire&quot;, &quot;sick&quot;). Gera uma mistura de usos gírias e literais para o modelo aprender pelo contexto.
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
-          <input
-            type="text"
-            placeholder="One word only — e.g. fire (optional)"
-            value={targetWord}
-            onChange={(e) => setTargetWord(e.target.value.split(/[\s,]+/)[0])}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+          <span className="text-xs text-muted-foreground">Ex: fire, cap, delulu</span>
         </div>
+        <input
+          id="target-word"
+          type="text"
+          placeholder="Digite apenas uma palavra em inglês…"
+          value={targetWord}
+          onChange={(e) => setTargetWord(e.target.value.split(/[\s,]+/)[0])}
+          className="h-10 w-full rounded-xl border border-input bg-card px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+      </div>
 
-        {/* Avoid overrepresented words toggle */}
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="avoid-overrepresented"
-            checked={params.avoid_overrepresented ?? true}
-            onChange={(e) => setParams((p) => ({ ...p, avoid_overrepresented: e.target.checked }))}
-            className="h-4 w-4 rounded border-input"
-          />
-          <label htmlFor="avoid-overrepresented" className="text-sm font-medium cursor-pointer">
-            Avoid words that already have enough examples
-          </label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                Steers the prompt away from words that already have 50+ slang and 30+ neutral examples in your dataset, so the batch doesn&apos;t keep piling more sentences onto words that are already well covered.
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+      {/* Avoid overrepresented words toggle */}
+      <div className="flex items-start gap-3 rounded-xl bg-primary-soft/60 p-3">
+        <input
+          type="checkbox"
+          id="avoid-overrepresented"
+          checked={params.avoid_overrepresented ?? true}
+          onChange={(e) => setParams((p) => ({ ...p, avoid_overrepresented: e.target.checked }))}
+          className="mt-0.5 size-4 shrink-0 rounded border-input accent-primary"
+        />
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="avoid-overrepresented" className="cursor-pointer text-sm font-semibold text-foreground">
+              Evitar termos já saturados no dataset
+            </label>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="size-3.5 cursor-help text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Afasta o prompt de palavras que já têm 50+ exemplos gírias e 30+ neutros no dataset, para o lote não continuar acumulando sentenças em palavras já bem cobertas.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <p className="text-xs text-muted-foreground">Prioriza variedade lexical e vocabulário sobressalente</p>
         </div>
+      </div>
 
-        <Button onClick={handleGenerate} disabled={generating} className="w-full">
-          {generating ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Generating… (this takes ~10s)
-            </>
-          ) : (
-            <>
-              <Zap className="w-4 h-4 mr-2" />
-              Generate {params.count} sentences{targetWord.trim() ? ` for "${targetWord.trim()}"` : ""}
-            </>
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+      {confirmDialog}
+      <Button onClick={handleGenerate} disabled={generating} className="h-12 w-full rounded-xl text-sm font-semibold shadow-card">
+        {generating ? (
+          <>
+            <Loader2 className="size-4 animate-spin" />
+            Gerando… (leva ~10s)
+          </>
+        ) : (
+          <>
+            <Sparkles className="size-4" />
+            Gerar Lote de {params.count} Sentenças Sintéticas{targetWord.trim() ? ` para "${targetWord.trim()}"` : ""}
+          </>
+        )}
+      </Button>
+    </section>
   )
 }
 
@@ -538,6 +697,7 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
   const [vocab, setVocab] = useState<VocabularyInfo | null>(null)
   const [vocabLoading, setVocabLoading] = useState(true)
   const [amplifying, setAmplifying] = useState(false)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const loadVocab = useCallback(async () => {
     setVocabLoading(true)
@@ -560,6 +720,12 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
       toast.error("Nenhuma palavra encontrada. Gere um batch primeiro.")
       return
     }
+    const confirmed = await confirm({
+      title: `Amplificar ${wordsBelowTarget.length} termos?`,
+      description: `A IA vai gerar novas sentenças para ${wordsBelowTarget.length} termos com pouca cobertura no dataset, equilibrando exemplos literais e informais. Termos já bem cobertos são ignorados e os novos itens entram na fila de curadoria. Isso pode demorar.`,
+      confirmLabel: "Amplificar",
+    })
+    if (!confirmed) return
     setAmplifying(true)
     try {
       const result = await amplifyVocabulary({})
@@ -578,51 +744,134 @@ function VocabularyAmplifySection({ onAmplified }: { onAmplified: () => void }) 
     ? vocab.words.filter((w) => !vocab.overrepresented_words.includes(w))
     : []
 
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" />
-          <CardTitle className="text-base font-semibold">Amplify Vocabulary</CardTitle>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Tops up words that have too few examples in your dataset — ambiguous words (like &quot;chill&quot;
-          or &quot;fire&quot;) get topped up on both slang and literal usage, pure slang words only on slang.
-          Words already well covered are skipped, so this won&apos;t keep flooding them with duplicate content.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {vocabLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading known vocabulary…
-          </div>
-        ) : (
-          <div className="rounded-lg border bg-accent/20 p-3 text-sm">
-            <span className="font-semibold">{vocab?.unique_words ?? 0}</span> unique words found —{" "}
-            <span className="font-semibold">{wordsBelowTarget.length}</span> below the coverage target
-          </div>
-        )}
+  const uniqueWords = vocab?.unique_words ?? 0
+  const gapPct = uniqueWords > 0 ? Math.min(100, (wordsBelowTarget.length / uniqueWords) * 100) : 0
+  const countOf = (w: string) => vocab?.word_counts?.[w] ?? 0
+  const priorityTerms = [...wordsBelowTarget].sort((a, b) => countOf(a) - countOf(b)).slice(0, 6)
+  const hiddenTerms = wordsBelowTarget.length - priorityTerms.length
 
-        <Button
-          onClick={handleAmplify}
-          disabled={amplifying || vocabLoading || wordsBelowTarget.length === 0}
-          className="w-full"
-        >
-          {amplifying ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Amplifying… (this may take a while)
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4 mr-2" />
-              Amplify {wordsBelowTarget.length} word{wordsBelowTarget.length === 1 ? "" : "s"}
-            </>
+  return (
+    <section className="flex flex-col gap-5 rounded-panel border border-border bg-card p-6 shadow-card">
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <TonalIcon icon={Layers} tone="success" size="md" />
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-bold text-foreground">Amplify Vocabulary</h3>
+            <Pill variant="primary" size="sm">Auto Top-Up</Pill>
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Identifica termos escassos ou com ambiguidade semântica e gera sentenças com cobertura equilibrada.
+          </p>
+        </div>
+      </div>
+
+      {vocabLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Carregando vocabulário…
+        </div>
+      ) : (
+        <>
+          {/* Gap diagnosis */}
+          <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center justify-between gap-2">
+              <EyebrowLabel className="text-foreground">Diagnóstico de lacunas</EyebrowLabel>
+              {wordsBelowTarget.length > 0 && (
+                <Pill variant="warning" size="sm">Atenção Prioritária</Pill>
+              )}
+            </div>
+            <div className="flex items-end gap-3">
+              <p className="flex items-baseline gap-1.5">
+                <span className="text-[32px] font-extrabold leading-none tracking-tight text-foreground">
+                  {wordsBelowTarget.length}
+                </span>
+                <span className="text-base font-bold text-foreground">termos</span>
+              </p>
+              <p className="text-xs leading-snug text-muted-foreground">abaixo da meta de cobertura do dataset</p>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Termos abaixo da meta"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(gapPct)}
+              className="h-2 w-full overflow-hidden rounded-full bg-warning-soft"
+            >
+              <div
+                className="h-full rounded-full bg-warning-strong transition-[width]"
+                style={{ width: `${gapPct}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {uniqueWords.toLocaleString()} palavras indexadas no dicionário ativo
+            </p>
+          </div>
+
+          {/* Priority terms */}
+          {priorityTerms.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-foreground">Termos prioritários na fila de reforço:</p>
+                <span className="text-xs font-semibold text-primary">{wordsBelowTarget.length} no total</span>
+              </div>
+              <ul className="flex flex-wrap gap-1.5">
+                {priorityTerms.map((w) => (
+                  <li
+                    key={w}
+                    className="inline-flex h-6 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-semibold text-foreground"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        countOf(w) <= 2 ? "bg-destructive" : "bg-warning-strong"
+                      )}
+                    />
+                    &quot;{w}&quot;
+                    <span className="font-normal text-muted-foreground">({countOf(w)} ex.)</span>
+                  </li>
+                ))}
+                {hiddenTerms > 0 && (
+                  <li className="inline-flex items-center">
+                    <Pill variant="neutral" size="sm">+{hiddenTerms}</Pill>
+                  </li>
+                )}
+              </ul>
+            </div>
           )}
-        </Button>
-      </CardContent>
-    </Card>
+
+          {/* Note */}
+          <div className="flex items-start gap-2 rounded-xl bg-primary-soft/60 p-3 text-xs leading-relaxed text-muted-foreground">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+            <p>
+              Palavras com ambiguidade literal (&quot;chill&quot;, &quot;fire&quot;) recebem proporção 50/50 de
+              exemplos literais e informais; termos já bem cobertos são ignorados.
+            </p>
+          </div>
+        </>
+      )}
+
+      {confirmDialog}
+      <Button
+        variant="outline"
+        onClick={handleAmplify}
+        disabled={amplifying || vocabLoading || wordsBelowTarget.length === 0}
+        className="mt-auto h-11 w-full rounded-xl border-2 border-primary bg-card text-sm font-semibold text-primary hover:bg-primary-soft hover:text-primary"
+      >
+        {amplifying ? (
+          <>
+            <Loader2 className="size-4 animate-spin" />
+            Amplificando… (pode demorar)
+          </>
+        ) : (
+          <>
+            <Rocket className="size-4" />
+            Amplificar {wordsBelowTarget.length} Termo{wordsBelowTarget.length === 1 ? "" : "s"} em 1-Clique
+          </>
+        )}
+      </Button>
+    </section>
   )
 }
 
@@ -636,6 +885,35 @@ const AI_SOURCES = ["ai_generated", "ai_amplified"]
 // Sources written by actual users reporting a bad result in the app.
 const USER_SOURCES = ["word_book", "word_detail_sentence", "word_detail_word"]
 
+// Display-only labels for the review queue (values sent to the API are unchanged).
+const SOURCE_TABS = [
+  { value: "all", label: "Todos os Casos" },
+  { value: "user", label: "Relatórios de Usuário" },
+  { value: "ai", label: "Gerados por IA" },
+] as const
+const CONFIDENCE_TABS = [
+  { value: "all", label: "Qualquer Confiança" },
+  { value: "low", label: "Baixa Confiança IA" },
+  { value: "medium", label: "Média" },
+  { value: "high", label: "Alta" },
+] as const
+const SOURCE_LABELS: Record<string, string> = {
+  word_book: "Caderno",
+  word_detail_sentence: "Frase",
+  word_detail_word: "Palavra",
+  ai_generated: "IA · Gerado",
+  ai_amplified: "IA · Amplificado",
+}
+const FAILURE_TYPE_LABELS: Record<string, string> = {
+  correct: "Correto",
+  wrong_slang_sense: "Sentido Errado",
+  missed_slang: "Gíria Não Detectada",
+  false_positive: "Falso Positivo",
+  literal_guard: "Sentido Literal",
+  poor_translation: "Tradução Ruim",
+  bad_generation: "Geração Ruim",
+}
+
 export function AdminFeedbackView() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -648,6 +926,7 @@ export function AdminFeedbackView() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const [stats, setStats] = useState<DatasetStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
 
@@ -765,6 +1044,12 @@ export function AdminFeedbackView() {
       toast.error("This still matches GPT's draft — edit it, or set failure type to \"Correct\" if it's actually fine")
       return
     }
+    const confirmed = await confirm({
+      title: "Aprovar correção e treinar?",
+      description: `"${row.input_text}" será salvo com a correção informada e entrará no dataset de treinamento do modelo. O item sai da fila de curadoria.`,
+      confirmLabel: "Aprovar e treinar",
+    })
+    if (!confirmed) return
     setBusyId(row.id)
     try {
       await approveTranslationFeedback(row.id, {
@@ -786,6 +1071,17 @@ export function AdminFeedbackView() {
   }
 
   const handleReject = async (row: FeedbackRow, status: "rejected" | "duplicate") => {
+    const isDuplicate = status === "duplicate"
+    const confirmed = await confirm({
+      title: isDuplicate ? "Marcar como duplicada?" : "Descartar item?",
+      description: isDuplicate
+        ? `"${row.input_text}" será marcado como amostra duplicada e removido da fila de curadoria, sem entrar no treinamento.`
+        : `"${row.input_text}" será rejeitado e removido da fila de curadoria, sem entrar no treinamento.`,
+      confirmLabel: isDuplicate ? "Marcar duplicada" : "Descartar",
+      tone: isDuplicate ? "warning" : "destructive",
+      icon: isDuplicate ? Copy : Trash2,
+    })
+    if (!confirmed) return
     setBusyId(row.id)
     try {
       await rejectTranslationFeedback(row.id, status)
@@ -1019,119 +1315,155 @@ export function AdminFeedbackView() {
   }, [filteredRows, activeIdx, drafts, busyId])
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-6">
+    <PageContainer className="space-y-6">
 
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <ShieldCheck className="w-6 h-6 text-primary" />
+      {confirmDialog}
+      <header className="flex items-start gap-4">
+        <TonalIcon icon={BrainCircuit} tone="primary" size="lg" />
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill variant="primary" size="sm" icon={Sparkles} className="uppercase tracking-[0.06em]">
+              Console de IA &amp; Curadoria
+            </Pill>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">ADMIN</p>
-            <h2 className="text-3xl font-bold text-foreground">Dataset & Feedback</h2>
-          </div>
+          <h2 className="text-[28px] font-extrabold leading-tight tracking-tight text-foreground">
+            Dataset &amp; Feedback Engine
+          </h2>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            Geração sintética supervisionada, telemetria de saúde de corpus e pipeline de
+            fine-tuning humano (HITL) para modelos ByT5 e DistilBERT.
+          </p>
         </div>
-        <p className="text-muted-foreground text-sm">
-          Generate training data automatically, track dataset health, and review uncertain items.
-        </p>
-      </div>
+      </header>
 
       {/* Dataset health dashboard */}
       <DatasetHealthSection stats={stats} loading={statsLoading} onRefresh={loadStats} />
 
-      {/* Generate batch */}
-      <GenerateBatchSection onGenerated={refreshAll} />
-
-      {/* Amplify vocabulary */}
-      <VocabularyAmplifySection onAmplified={refreshAll} />
+      {/* Generator + Amplify */}
+      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <GenerateBatchSection onGenerated={refreshAll} />
+        <VocabularyAmplifySection onAmplified={refreshAll} />
+      </div>
 
       {/* Review queue */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold">Review Queue</h3>
-            <Badge variant="outline" className="px-3 py-1">
-              {total} pending
-            </Badge>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="text-2xl font-extrabold tracking-tight text-foreground">
+              Fila de Curadoria Ativa (HITL)
+            </h3>
+            <Pill variant="primary" size="sm" dot>
+              {total} {total === 1 ? "item requer decisão imediata" : "itens requerem decisão imediata"}
+            </Pill>
           </div>
-          <Button variant="outline" onClick={loadRows} disabled={loading}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Reload
+          <Button variant="outline" size="sm" onClick={loadRows} disabled={loading} className="rounded-lg bg-card">
+            <RefreshCw className="size-3.5" />
+            Recarregar Fila
           </Button>
         </div>
 
-        {/* Search & Filters */}
-        <div className="bg-muted/30 border rounded-lg p-4 mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div className="relative col-span-1 md:col-span-2">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        {/* Filters as tabs + search */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="tablist" aria-label="Origem" className="flex flex-wrap items-center gap-1">
+            {SOURCE_TABS.map((t) => {
+              const active = sourceFilter === t.value
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    setSourceFilter(t.value)
+                    updateParams({ page: 1 })
+                  }}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-colors",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-card"
+                      : "text-muted-foreground hover:bg-primary-soft hover:text-primary-soft-foreground",
+                  )}
+                >
+                  {t.label}
+                  {active && !loading ? (
+                    <span className="rounded-full bg-primary-foreground/20 px-1.5 text-[10px] leading-4">{total}</span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+          <div role="tablist" aria-label="Confiança" className="flex flex-wrap items-center gap-1">
+            {CONFIDENCE_TABS.map((t) => {
+              const active = confidenceFilter === t.value
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setConfidenceFilter(t.value)}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-colors",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-card"
+                      : "text-muted-foreground hover:bg-primary-soft hover:text-primary-soft-foreground",
+                  )}
+                >
+                  {t.label}
+                  {active && t.value !== "all" && !loading ? (
+                    <span title="nesta página" className="rounded-full bg-primary-foreground/20 px-1.5 text-[10px] leading-4">
+                      {filteredRows.length}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+          <div className="relative ml-auto w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search by input text, translation, or feedback..."
+              placeholder="Buscar por entrada ou tradução…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="h-8 rounded-full bg-card pl-9 text-xs"
             />
-          </div>
-
-          <div>
-            <select
-              value={sourceFilter}
-              onChange={(e) => {
-                setSourceFilter(e.target.value)
-                updateParams({ page: 1 })
-              }}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="user">User Reports Only</option>
-              <option value="ai">AI Generated (dataset seeding) Only</option>
-              <option value="all">All Sources</option>
-            </select>
-          </div>
-
-          <div>
-            <select
-              value={confidenceFilter}
-              onChange={(e) => setConfidenceFilter(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="all">All Confidence</option>
-              <option value="low">Low Confidence (Uncertain)</option>
-              <option value="medium">Medium Confidence</option>
-              <option value="high">High Confidence</option>
-            </select>
           </div>
         </div>
 
         {/* Keyboard Shortcuts Helper & Selection Info */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 text-xs text-muted-foreground bg-muted/20 border border-dashed rounded-lg px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <Keyboard className="w-4 h-4 text-primary/80" />
-            <span className="font-semibold">Hotkeys:</span>
-            <span><kbd className="px-1 border rounded bg-background">J</kbd>/<kbd className="px-1 border rounded bg-background">K</kbd> navigation</span>
-            <span>•</span>
-            <span><kbd className="px-1 border rounded bg-background">A</kbd> Approve</span>
-            <span>•</span>
-            <span><kbd className="px-1 border rounded bg-background">R</kbd> Reject</span>
-            <span>•</span>
-            <span><kbd className="px-1 border rounded bg-background">D</kbd> Duplicate</span>
-            <span>•</span>
-            <span><kbd className="px-1 border rounded bg-background">E</kbd> Focus expected text</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-primary-soft/60 px-4 py-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
+              <Keyboard className="size-4 text-primary" />
+              Atalhos de produtividade:
+            </span>
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <KbdHint>J</KbdHint>/<KbdHint label="navegar">K</KbdHint>
+            </span>
+            <span aria-hidden className="text-muted-foreground/50">•</span>
+            <KbdHint label="aprovar">A</KbdHint>
+            <span aria-hidden className="text-muted-foreground/50">•</span>
+            <KbdHint label="rejeitar">R</KbdHint>
+            <span aria-hidden className="text-muted-foreground/50">•</span>
+            <KbdHint label="duplicar">D</KbdHint>
+            <span aria-hidden className="text-muted-foreground/50">•</span>
+            <KbdHint label="editar texto esperado">E</KbdHint>
           </div>
-          <div>
-            {filteredRows.length !== rows.length ? (
-              <span>Showing {filteredRows.length} of {rows.length} pending items on this page</span>
-            ) : (
-              <span>{rows.length} pending items on this page</span>
-            )}
-          </div>
+          <span className="font-mono text-[11px] text-muted-foreground">
+            {filteredRows.length !== rows.length
+              ? `Exibindo ${filteredRows.length} de ${rows.length} itens nesta página`
+              : `Item ${activeIdx >= 0 ? activeIdx + 1 : 0} de ${rows.length} na página atual`}
+          </span>
         </div>
 
         {/* Bulk Action Floating Bar */}
         {selectedIds.length > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground border shadow-2xl rounded-full px-6 py-3 flex items-center gap-4 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="flex items-center gap-2 text-sm font-medium border-r pr-4 border-border">
-              <ListChecks className="w-4 h-4 text-primary" />
-              <span>{selectedIds.length} items selected</span>
+          <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-full border border-border bg-card px-6 py-3 text-foreground shadow-card animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center gap-2 border-r border-border pr-4 text-sm font-medium">
+              <ListChecks className="size-4 text-primary" />
+              <span>{selectedIds.length} {selectedIds.length === 1 ? "item selecionado" : "itens selecionados"}</span>
             </div>
             <div className="flex gap-2">
               <Button
@@ -1139,38 +1471,39 @@ export function AdminFeedbackView() {
                 size="sm"
                 onClick={() => handleBulkReject("duplicate")}
                 disabled={busyId !== null}
-                className="rounded-full h-8"
+                className="h-8 rounded-full"
               >
-                <Trash2 className="w-3.5 h-3.5 mr-1" />
-                Bulk Duplicate
+                <Copy className="size-3.5" />
+                Duplicar em lote
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleBulkReject("rejected")}
                 disabled={busyId !== null}
-                className="rounded-full h-8 text-destructive border-destructive/20 hover:bg-destructive/10"
+                className="h-8 rounded-full border-destructive/30 text-destructive hover:bg-destructive-soft hover:text-destructive"
               >
-                <X className="w-3.5 h-3.5 mr-1" />
-                Bulk Reject
+                <X className="size-3.5" />
+                Rejeitar em lote
               </Button>
               <Button
                 size="sm"
                 onClick={handleBulkApprove}
                 disabled={busyId !== null}
-                className="rounded-full h-8"
+                className="h-8 rounded-full"
               >
-                <Check className="w-3.5 h-3.5 mr-1" />
-                Bulk Approve
+                <Check className="size-3.5" />
+                Aprovar em lote
               </Button>
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSelectedIds([])}
-              className="h-7 w-7 rounded-full ml-1"
+              aria-label="Limpar seleção"
+              className="ml-1 size-7 rounded-full"
             >
-              <X className="w-4 h-4" />
+              <X className="size-4" />
             </Button>
           </div>
         )}
@@ -1178,37 +1511,29 @@ export function AdminFeedbackView() {
         {loading ? (
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-5 w-2/3" />
-                  <Skeleton className="h-4 w-1/3 mt-2" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-20 w-full" />
-                </CardContent>
-              </Card>
+              <div key={i} className="space-y-3 rounded-panel border border-border bg-card p-6 shadow-card">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-20 w-full" />
+              </div>
             ))}
           </div>
         ) : filteredRows.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 flex items-center justify-center gap-2 text-muted-foreground">
-              <CheckCircle2 className="w-4 h-4 text-green-500" /> No matching items in the queue.
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-center gap-2 rounded-panel border border-border bg-card py-12 text-sm text-muted-foreground shadow-card">
+            <CheckCircle2 className="size-4 text-success" /> Nenhum item correspondente na fila.
+          </div>
         ) : (
           <div className="space-y-4">
             {/* Select All Checkbox */}
-            <div className="flex items-center gap-2 px-4 py-2 bg-muted/10 border rounded-lg">
+            <label className="flex w-fit cursor-pointer select-none items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
               <input
                 type="checkbox"
                 checked={selectedIds.length === filteredRows.length && filteredRows.length > 0}
                 onChange={toggleSelectAll}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                className="size-4 rounded border-border accent-primary"
               />
-              <span className="text-sm font-medium select-none cursor-pointer" onClick={toggleSelectAll}>
-                Select all visible ({filteredRows.length})
-              </span>
-            </div>
+              Selecionar todos visíveis ({filteredRows.length})
+            </label>
 
             {filteredRows.map((row, index) => {
               const draft = drafts[row.id] || makeDraft(row)
@@ -1217,158 +1542,199 @@ export function AdminFeedbackView() {
               const isAiGenerated = AI_SOURCES.includes(row.source)
               const isFocused = activeIdx === index
               const isSelected = selectedIds.includes(row.id)
+              const modelWarnings = row.model_metadata?.translation_warnings?.model ?? []
+              const normalizationChanged =
+                !!row.model_normalized && normText(row.model_normalized) !== normText(row.input_text)
 
               return (
-                <Card
+                <article
                   key={row.id}
                   id={`card-${row.id}`}
                   onClick={() => setActiveIdx(index)}
-                  className={`border-border/70 transition-all duration-200 cursor-pointer ${isFocused ? "ring-2 ring-primary border-primary shadow-lg bg-primary/[0.01]" : ""
-                    } ${isSelected ? "border-primary/40 bg-primary/[0.02]" : ""
-                    }`}
+                  className={cn(
+                    "cursor-pointer space-y-5 rounded-[20px] border bg-card p-6 shadow-card transition-all duration-200",
+                    isFocused ? "border-primary ring-2 ring-primary/25" : "border-primary/30 hover:border-primary/60",
+                    isSelected && "bg-primary-soft/20",
+                  )}
                 >
-                  <CardHeader>
-                    <div className="flex items-start gap-4">
-                      {/* Checkbox for selection */}
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelectRow(row.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 mt-1.5 rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <CardTitle className="text-lg">{row.input_text}</CardTitle>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {isAiGenerated ? (
-                            <Badge variant="secondary" className="gap-1">
-                              <Bot className="w-3 h-3" /> AI generated
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="gap-1">
-                              <User className="w-3 h-3" /> User report
-                            </Badge>
-                          )}
+                  {/* Top row: selection + pills + actions */}
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelectRow(row.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Selecionar item"
+                      className="mt-1 size-4 rounded border-border accent-primary"
+                    />
+                    <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                      {isAiGenerated ? (
+                        <Pill variant="info" icon={Bot}>Gerado por IA</Pill>
+                      ) : (
+                        <Pill variant="destructive" icon={Flag}>Reportado por Usuário</Pill>
+                      )}
 
-                          {isAiGenerated && row.model_metadata?.category && (
-                            <Badge variant="outline" className="text-xs">
-                              {row.model_metadata.category}
-                            </Badge>
-                          )}
+                      {isAiGenerated && row.model_metadata?.category && (
+                        <Pill variant="primary" icon={Hash}>{row.model_metadata.category}</Pill>
+                      )}
 
-                          {confidenceBadge && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium flex items-center gap-1 ${confidenceBadge.className}`}>
-                              <AlertTriangle className="w-3 h-3" /> {confidenceBadge.label}
-                            </span>
-                          )}
+                      <Pill variant={row.model_is_slang ? "primary" : "neutral"}>
+                        Modelo: {row.model_is_slang ? "Gíria" : "Neutro"}
+                      </Pill>
 
-                          <Badge variant={row.model_is_slang ? "default" : "outline"}>
-                            model: {row.model_is_slang ? "slang" : "not slang"}
-                          </Badge>
+                      {confidenceBadge && (
+                        <Pill variant={confidenceBadge.variant} dot>
+                          Confiança do Modelo: {confidenceBadge.label}
+                        </Pill>
+                      )}
 
-                          {row.user_feedback !== "ai_generated" && (
-                            <Badge variant="outline">{row.user_feedback}</Badge>
-                          )}
-                        </div>
-
-                        {isAiGenerated &&
-                          row.model_metadata?.slang_words &&
-                          row.model_metadata.slang_words.length > 0 && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Slang words: {row.model_metadata.slang_words.join(", ")}
-                            </p>
-                          )}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          navigator.clipboard.writeText(row.input_text)
-                        }}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+                      {row.user_feedback !== "ai_generated" && (
+                        <Pill variant="outline">{row.user_feedback}</Pill>
+                      )}
                     </div>
-                  </CardHeader>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Copiar entrada"
+                      className="size-8 text-muted-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigator.clipboard.writeText(row.input_text)
+                      }}
+                    >
+                      <Copy className="size-4" />
+                    </Button>
+                  </div>
 
-                  <CardContent className="space-y-4" onClick={(e) => e.stopPropagation()}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="rounded-md border bg-accent/20 p-3">
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Model normalized (diff vs original)</p>
-                        <div className="text-sm">
+                  <div className="space-y-5" onClick={(e) => e.stopPropagation()}>
+                    {/* Input under review */}
+                    <div className="space-y-2">
+                      <EyebrowLabel>Entrada em análise</EyebrowLabel>
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-primary-soft/50 px-5 py-4">
+                        <p className="text-xl font-extrabold tracking-tight text-foreground">
+                          &ldquo;{row.input_text}&rdquo;
+                        </p>
+                        <Pill variant="primary" size="sm">
+                          Fonte: {SOURCE_LABELS[row.source] ?? row.source}
+                        </Pill>
+                      </div>
+                      {isAiGenerated &&
+                        row.model_metadata?.slang_words &&
+                        row.model_metadata.slang_words.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Gírias: {row.model_metadata.slang_words.join(", ")}
+                          </p>
+                        )}
+                    </div>
+
+                    {/* Model output panels */}
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="space-y-2 rounded-xl border border-destructive/20 bg-destructive-soft/40 p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <EyebrowLabel className="text-destructive-soft-foreground">
+                            Saída do modelo (normalização)
+                          </EyebrowLabel>
+                          <Pill variant="destructive" size="sm">
+                            {normalizationChanged ? "Substituição" : "Sem alteração"}
+                          </Pill>
+                        </div>
+                        <div className="text-base font-semibold text-foreground">
                           <DiffHighlight original={row.input_text} revised={row.model_normalized || ""} />
                         </div>
                       </div>
-                      <div className="rounded-md border bg-accent/20 p-3">
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Model translation</p>
-                        <p className="text-sm">{row.model_translation || "-"}</p>
-                        {(row.model_metadata?.translation_warnings?.model?.length ?? 0) > 0 && (
-                          <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" /> {row.model_metadata!.translation_warnings!.model!.join(", ")}
+                      <div className="space-y-2 rounded-xl border border-warning-strong/25 bg-warning-soft/40 p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <EyebrowLabel className="text-warning-soft-foreground">
+                            Tradução atual do modelo
+                          </EyebrowLabel>
+                          {modelWarnings.length > 0 && (
+                            <Pill variant="warning" size="sm">
+                              {modelWarnings.length} {modelWarnings.length === 1 ? "alerta" : "alertas"}
+                            </Pill>
+                          )}
+                        </div>
+                        <p className="text-base font-semibold text-foreground">
+                          &ldquo;{row.model_translation || "-"}&rdquo;
+                        </p>
+                        {modelWarnings.length > 0 && (
+                          <p className="flex items-center gap-1 text-xs text-destructive">
+                            <AlertTriangle className="size-3" /> {modelWarnings.join(", ")}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Expected values */}
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Expected normalized English</label>
+                        <div className="flex min-h-7 items-end justify-between gap-2">
+                          <label htmlFor={`normalized-${row.id}`} className="text-sm font-bold text-foreground">
+                            Inglês Normalizado Esperado
+                          </label>
+                          <span className="text-[11px] text-muted-foreground">Equivalente neutro</span>
+                        </div>
                         <Textarea
                           id={`normalized-${row.id}`}
                           value={draft.expected_normalized}
                           onChange={(e) => updateDraft(row.id, { expected_normalized: e.target.value })}
-                          className="min-h-20"
+                          className="min-h-20 rounded-xl border-primary/40 bg-card focus-visible:border-primary focus-visible:ring-primary/20"
                         />
                       </div>
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-sm font-medium">Expected Portuguese</label>
+                        <div className="flex min-h-7 items-end justify-between gap-2">
+                          <label className="text-sm font-bold text-foreground">
+                            Português Natural (Tradução Humana)
+                          </label>
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             disabled={isSuggesting[row.id] || disabled}
                             onClick={() => handleSuggestTranslation(row)}
-                            className="h-7 text-xs text-primary hover:text-primary gap-1 px-2"
+                            className="h-7 gap-1 px-2 text-xs font-semibold text-primary hover:bg-primary-soft hover:text-primary"
                           >
                             {isSuggesting[row.id] ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <Loader2 className="size-3.5 animate-spin" />
                             ) : (
-                              <Sparkles className="w-3.5 h-3.5" />
+                              <Sparkles className="size-3.5" />
                             )}
-                            Suggest Translation
+                            Sugerir Tradução
                           </Button>
                         </div>
                         <Textarea
                           value={draft.expected_translation}
                           onChange={(e) => updateDraft(row.id, { expected_translation: e.target.value })}
-                          className="min-h-20"
+                          className="min-h-20 rounded-xl border-primary/40 bg-card focus-visible:border-primary focus-visible:ring-primary/20"
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-3">
+                    {/* Failure reason + slang toggle */}
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-end">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium flex items-center justify-between">
-                          <span>Failure type</span>
-                          <span className="text-xs text-muted-foreground">Select a category below or type custom</span>
-                        </label>
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span className="text-sm font-bold text-foreground">Motivo da Falha (Taxonomia de Erro)</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Selecione uma categoria ou digite uma personalizada
+                          </span>
+                        </div>
 
                         {/* Predefined Failure Type Pills */}
-                        <div className="flex flex-wrap gap-1.5 mb-2">
+                        <div className="flex flex-wrap gap-1.5">
                           {FAILURE_TYPES.map((ft) => (
                             <button
                               key={ft.value}
                               type="button"
                               title={ft.desc}
                               onClick={() => updateDraft(row.id, { failure_type: ft.value })}
-                              className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all ${draft.failure_type === ft.value
-                                  ? "bg-primary text-primary-foreground border-primary font-medium"
-                                  : "bg-muted text-muted-foreground border-border hover:bg-muted/80 hover:text-foreground"
-                                }`}
+                              className={cn(
+                                "h-7 rounded-full px-3 text-xs font-semibold transition-colors",
+                                draft.failure_type === ft.value
+                                  ? "bg-primary text-primary-foreground shadow-card"
+                                  : "bg-primary-soft/60 text-primary-soft-foreground hover:bg-primary-soft",
+                              )}
                             >
-                              {ft.label}
+                              {FAILURE_TYPE_LABELS[ft.value] ?? ft.label}
                             </button>
                           ))}
                         </div>
@@ -1376,69 +1742,114 @@ export function AdminFeedbackView() {
                         <Input
                           value={draft.failure_type}
                           onChange={(e) => updateDraft(row.id, { failure_type: e.target.value })}
-                          placeholder="Or type a custom failure type..."
+                          placeholder="Ou digite um motivo personalizado…"
+                          className="h-8 rounded-lg text-xs"
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Expected slang?</label>
-                        <Button
-                          type="button"
-                          variant={draft.expected_is_slang ? "default" : "outline"}
-                          className="w-full"
-                          onClick={() => updateDraft(row.id, { expected_is_slang: !draft.expected_is_slang })}
-                        >
-                          {draft.expected_is_slang ? "Yes" : "No"}
-                        </Button>
+                      <div className="space-y-1.5">
+                        <span className="block text-sm font-bold text-foreground md:text-right">
+                          Confirmação: É Gíria?
+                        </span>
+                        <div role="group" aria-label="É gíria?" className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+                          <button
+                            type="button"
+                            aria-pressed={draft.expected_is_slang}
+                            onClick={() => updateDraft(row.id, { expected_is_slang: true })}
+                            className={cn(
+                              "h-8 rounded-lg px-4 text-xs font-semibold transition-colors",
+                              draft.expected_is_slang
+                                ? "bg-primary text-primary-foreground shadow-card"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            Sim (Slang)
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={!draft.expected_is_slang}
+                            onClick={() => updateDraft(row.id, { expected_is_slang: false })}
+                            className={cn(
+                              "h-8 rounded-lg px-4 text-xs font-semibold transition-colors",
+                              !draft.expected_is_slang
+                                ? "bg-primary text-primary-foreground shadow-card"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            Não (Neutro)
+                          </button>
+                        </div>
                       </div>
                     </div>
 
                     {isAiGenerated && !draftWasEdited(row, draft) && draft.failure_type !== "correct" && (
-                      <p className="text-xs text-amber-600 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" /> This still matches GPT&apos;s draft — edit it, or set failure type to &quot;Correct&quot; to approve as-is.
+                      <p className="flex items-center gap-1 text-xs text-warning-soft-foreground">
+                        <AlertTriangle className="size-3" /> Ainda igual ao rascunho do GPT — edite, ou marque o motivo como &ldquo;Correto&rdquo; para aprovar como está.
                       </p>
                     )}
 
-                    <div className="flex flex-wrap gap-2 justify-end">
+                    {/* Card footer actions */}
+                    <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
                       <Button
-                        variant="outline"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleReject(row, "duplicate")}
                         disabled={disabled}
+                        className="text-muted-foreground"
                       >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Duplicate
+                        <Copy className="size-3.5" />
+                        Duplicar Amostra
                       </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleReject(row, "rejected")}
-                        disabled={disabled}
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Reject
-                      </Button>
-                      <Button onClick={() => handleApprove(row)} disabled={disabled}>
-                        {busyId === row.id ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Check className="w-4 h-4 mr-2" />
-                        )}
-                        Approve
-                      </Button>
+                      <div className="ml-auto flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          className="rounded-xl"
+                          onClick={() => setActiveIdx(index < filteredRows.length - 1 ? index + 1 : index)}
+                          disabled={disabled}
+                        >
+                          <SkipForward className="size-4" />
+                          Pular Item
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl border-destructive/40 text-destructive hover:bg-destructive-soft hover:text-destructive"
+                          onClick={() => handleReject(row, "rejected")}
+                          disabled={disabled}
+                        >
+                          <Trash2 className="size-4" />
+                          Descartar
+                        </Button>
+                        <Button
+                          className="rounded-xl px-5 font-semibold shadow-card"
+                          onClick={() => handleApprove(row)}
+                          disabled={disabled}
+                        >
+                          {busyId === row.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="size-4" />
+                          )}
+                          Aprovar Correção &amp; Treinar
+                        </Button>
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </article>
               )
             })}
 
-            <PaginationControls
-              page={page}
-              pageSize={pageSize}
-              total={total}
-              onPageChange={(p) => updateParams({ page: p })}
-              onPageSizeChange={(s) => updateParams({ page: 1, pageSize: s })}
-            />
+            <div className="border-t border-border pt-2">
+              <PaginationControls
+                page={page}
+                pageSize={pageSize}
+                total={total}
+                onPageChange={(p) => updateParams({ page: p })}
+                onPageSizeChange={(s) => updateParams({ page: 1, pageSize: s })}
+                itemLabel="itens da fila"
+              />
+            </div>
           </div>
         )}
-      </div>
-    </div>
+      </section>
+    </PageContainer>
   )
 }
